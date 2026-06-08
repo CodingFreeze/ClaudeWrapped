@@ -34,3 +34,97 @@ DESIGN.md
 design.md
 ARCHITECTURE.md
 architecture.md
+# ============================================================
+# REVAMP TOOLING GUARD — local-only artifacts, never commit
+# Append to each repo's .gitignore (do not overwrite project rules).
+# The TOOLING block is also suitable for ~/.gitignore_global.
+# ============================================================
+
+# ---------- TOOLING block (agent/skill/plugin artifacts) ----------
+# ruflo
+.ruflo/
+ruvector.db
+agentdb.rvf
+*.rvf
+*.ruvector
+
+# superpowers (specs/plans/reviews authored by skills)
+docs/superpowers/
+**/superpowers/
+
+# Claude Code / agents
+.claude/
+.claude-mem/
+CLAUDE.md
+CLAUDE.local.md
+AGENTS.md
+GEMINI.md
+HANDOFF.md
+DESIGN.md
+
+# Serena / Codex / misc agent scratch
+.serena/
+.codex/
+.aider*
+.cursor/
+
+# local planning / notes / per-repo revamp scratch
+# >>> Put ALL local-only docs here: plugin notes, design docs, claude/agent notes <<<
+.revamp/
+planning/
+_local/
+_scratch/
+*.local.md
+*.design.md
+*.plugin.md
+NOTES.local*
+
+# ---------- PROJECT block (secrets, builds, deps, OS) ----------
+# secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets.*
+# Flask instance dir (sqlite + config)
+instance/
+# Kaggle API credential (leaked in MathFi)
+kaggle.json
+.kaggle/
+**/.kaggle/
+# stray home dir accidentally committed (MathFi)
+/~
+~/
+
+# python
+.venv/
+venv/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# node / web
+node_modules/
+dist/
+build/
+.next/
+.svelte-kit/
+.vercel/
+*.tsbuildinfo
+
+# large/vendored data (de-vendor; download via script instead)
+data/external/
+data/raw/
+**/data/raw/
+*.tar.bz2
+*.h5
+*.pkl
+*.pt
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.log
+.idea/
+.vscode/
