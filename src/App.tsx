@@ -4,6 +4,7 @@ import {
   ClaudeAiResultPanel,
   JsonlResultPanel,
 } from "./components/ResultPanels";
+import { WrappedCard } from "./components/WrappedCard";
 import { parseClaudeAiZip } from "./lib/claudeAiZip";
 import { discoverJsonlSchema } from "./lib/jsonlSchema";
 import type { ClaudeAiParseResult, JsonlDiscoveryResult } from "./lib/types";
@@ -93,14 +94,17 @@ function App() {
         </section>
 
         <div className="flex flex-col gap-6">
+          {zipResult && zipResult.monthlySeries.length > 0 && (
+            <WrappedCard series={zipResult.monthlySeries} />
+          )}
           {zipResult && <ClaudeAiResultPanel result={zipResult} />}
           {jsonlResult && <JsonlResultPanel result={jsonlResult} />}
         </div>
 
         {!zipResult && !jsonlResult && (
           <p className="mt-10 text-center text-sm text-zinc-600">
-            Drop data above to see parsed counts. No visualizations yet — that's
-            Phase 2, after the Claude Code schema is confirmed.
+            Drop your Claude.ai export above to see your wrapped card and parsed
+            counts. More wrapped cards are in progress.
           </p>
         )}
       </div>

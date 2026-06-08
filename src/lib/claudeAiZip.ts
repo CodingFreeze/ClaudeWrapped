@@ -4,6 +4,7 @@ import type {
   ClaudeAiMessage,
   ClaudeAiParseResult,
 } from "./types";
+import { toMonthlySeries } from "./wrapped";
 
 // Parses a Claude.ai export ZIP entirely in-browser. We look for a
 // conversations.json anywhere in the archive (the export sometimes nests it),
@@ -42,6 +43,7 @@ export async function parseClaudeAiZip(file: File): Promise<ClaudeAiParseResult>
 
   let messageCount = 0;
   const senderCounts: Record<string, number> = {};
+  const dated: Array<{ ts: string }> = [];
   let earliest: string | undefined;
   let latest: string | undefined;
 
@@ -63,6 +65,7 @@ export async function parseClaudeAiZip(file: File): Promise<ClaudeAiParseResult>
 
       const ts = typeof msg?.created_at === "string" ? msg.created_at : undefined;
       if (ts) {
+        dated.push({ ts });
         if (!earliest || ts < earliest) earliest = ts;
         if (!latest || ts > latest) latest = ts;
       }
@@ -81,6 +84,7 @@ export async function parseClaudeAiZip(file: File): Promise<ClaudeAiParseResult>
     conversationCount: conversations.length,
     messageCount,
     senderCounts,
+    monthlySeries: toMonthlySeries(dated),
     earliest,
     latest,
     warnings: trimmedWarnings,

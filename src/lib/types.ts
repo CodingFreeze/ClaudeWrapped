@@ -8,6 +8,8 @@
 // a typed schema once the user confirms the real fields. See HANDOFF.md.
 // ---------------------------------------------------------------------------
 
+import type { MonthlyDatum } from "./wrapped";
+
 // ----- Source 1: Claude.ai export ZIP (conversations.json) -----
 
 export interface ClaudeAiMessage {
@@ -32,6 +34,8 @@ export interface ClaudeAiParseResult {
   conversationCount: number;
   messageCount: number;
   senderCounts: Record<string, number>;
+  /** Messages bucketed by 'YYYY-MM', sorted ascending (drives the wrapped card). */
+  monthlySeries: MonthlyDatum[];
   earliest?: string;
   latest?: string;
   /** Non-fatal problems encountered while parsing. */
