@@ -1,10 +1,5 @@
 @import "tailwindcss";
 
-/* Hallmark · macrostructure: Stat-Led tool surface · genre: atmospheric
- * tone: technical · anchor hue: warm-orange · theme: brand-preserving (zinc paper + orange accent)
- * pre-emit critique: P5 H4 E4 S4 R5 V4
- */
-
 :root {
   color-scheme: dark;
 
