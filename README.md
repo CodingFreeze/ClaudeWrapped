@@ -2,6 +2,8 @@
 
 Turn your Claude export into a personal year-in-review — fully in your browser, no upload.
 
+**Live demo:** https://claudewrapped-azure.vercel.app
+
 Claude Wrapped is a static, client-side web app: you drop your Claude data
 export and it produces a Spotify-Wrapped-style summary of how you used Claude.
 Nothing is uploaded — every byte is parsed locally in your browser.
