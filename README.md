@@ -6,6 +6,8 @@ Claude Wrapped is a static, client-side web app: you drop your Claude data
 export and it produces a Spotify-Wrapped-style summary of how you used Claude.
 Nothing is uploaded — every byte is parsed locally in your browser.
 
+![Claude Wrapped — monthly activity card](docs/media/wrapped-card.png)
+
 ## How it works
 
 1. Export your data from Claude.ai (Settings → export) — you get a `.zip` that
