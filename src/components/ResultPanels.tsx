@@ -1,10 +1,34 @@
 import type { ClaudeAiParseResult, JsonlDiscoveryResult } from "../lib/types";
 
-function Stat({ label, value }: { label: string; value: string | number }) {
+function Stat({
+  label,
+  value,
+  accent = false,
+}: {
+  label: string;
+  value: string | number;
+  accent?: boolean;
+}) {
   return (
-    <div className="rounded-xl bg-zinc-800/70 px-4 py-3">
-      <div className="text-2xl font-bold text-zinc-100 tabular-nums">{value}</div>
-      <div className="text-xs uppercase tracking-wide text-zinc-500">{label}</div>
+    <div
+      className={[
+        "rounded-xl border px-4 py-3 transition-colors duration-300",
+        accent
+          ? "border-orange-500/25 bg-orange-500/10 hover:border-orange-400/40"
+          : "border-zinc-800/80 bg-zinc-800/40 hover:border-zinc-700 hover:bg-zinc-800/60",
+      ].join(" ")}
+    >
+      <div
+        className={[
+          "text-2xl font-bold tabular-nums",
+          accent ? "text-orange-300" : "text-zinc-100",
+        ].join(" ")}
+      >
+        {value}
+      </div>
+      <div className="mt-0.5 text-[11px] uppercase tracking-wide text-zinc-500">
+        {label}
+      </div>
     </div>
   );
 }
@@ -69,8 +93,8 @@ export function ClaudeAiResultPanel({ result }: { result: ClaudeAiParseResult })
       </h3>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Stat label="Conversations" value={result.conversationCount.toLocaleString()} />
-        <Stat label="Messages" value={result.messageCount.toLocaleString()} />
+        <Stat label="Conversations" value={result.conversationCount.toLocaleString()} accent />
+        <Stat label="Messages" value={result.messageCount.toLocaleString()} accent />
         <Stat label="Earliest" value={fmt(result.earliest)} />
         <Stat label="Latest" value={fmt(result.latest)} />
       </div>

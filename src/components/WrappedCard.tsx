@@ -63,31 +63,39 @@ export function WrappedCard({ series }: { series: MonthlyDatum[] }) {
   return (
     <div
       className={[
-        "rounded-2xl border border-zinc-800 bg-gradient-to-br from-zinc-900/80 to-zinc-900/40 p-6",
-        "transition-all duration-700 ease-out",
+        "relative overflow-hidden rounded-2xl border border-zinc-800/80 p-6 sm:p-7",
+        "bg-gradient-to-br from-zinc-900/90 via-zinc-900/60 to-zinc-950/80",
+        "shadow-[0_30px_80px_-40px_rgba(0,0,0,0.9)]",
+        "transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)]",
         revealed ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0",
       ].join(" ")}
     >
-      <div className="mb-5 flex items-baseline justify-between gap-4">
+      {/* warm top-edge bloom */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-[radial-gradient(80%_100%_at_50%_0%,rgba(251,146,60,0.10),transparent_70%)]"
+      />
+      <div className="relative mb-5 flex items-baseline justify-between gap-4">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-widest text-orange-400">
+          <p className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-orange-400">
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-orange-400 shadow-[0_0_8px_rgba(251,146,60,0.9)]" />
             Your year, wrapped
           </p>
-          <h3 className="mt-1 text-lg font-bold text-zinc-100">
+          <h3 className="mt-1.5 text-xl font-bold tracking-tight text-zinc-100">
             Monthly activity
           </h3>
         </div>
         <div className="text-right">
-          <div className="text-2xl font-bold tabular-nums text-zinc-100">
+          <div className="text-3xl font-bold tabular-nums text-zinc-50">
             {total.toLocaleString()}
           </div>
-          <div className="text-xs uppercase tracking-wide text-zinc-500">
+          <div className="text-[11px] uppercase tracking-wide text-zinc-500">
             messages
           </div>
         </div>
       </div>
 
-      <div className="h-64 w-full">
+      <div className="relative h-64 w-full">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
             data={series}
@@ -133,7 +141,7 @@ export function WrappedCard({ series }: { series: MonthlyDatum[] }) {
         </ResponsiveContainer>
       </div>
 
-      <p className="mt-4 text-sm text-zinc-400">
+      <p className="relative mt-4 text-sm text-zinc-400">
         Busiest month:{" "}
         <span className="font-semibold text-orange-400">
           {new Date(

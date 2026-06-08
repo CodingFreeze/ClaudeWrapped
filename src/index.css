@@ -1,7 +1,31 @@
 @import "tailwindcss";
 
+/* Hallmark · macrostructure: Stat-Led tool surface · genre: atmospheric
+ * tone: technical · anchor hue: warm-orange · theme: brand-preserving (zinc paper + orange accent)
+ * pre-emit critique: P5 H4 E4 S4 R5 V4
+ */
+
 :root {
   color-scheme: dark;
+
+  /* ----- Color tokens (brand-preserving: zinc base + orange accent) ----- */
+  --color-paper: #09090b; /* zinc-950 */
+  --color-surface: oklch(21% 0.006 286);
+  --color-surface-2: oklch(25% 0.006 286);
+  --color-hairline: oklch(30% 0.006 286);
+  --color-ink: oklch(98% 0 0);
+  --color-ink-soft: oklch(72% 0.01 286);
+  --color-ink-mute: oklch(55% 0.01 286);
+  --color-accent: oklch(70% 0.18 47); /* orange-400 family */
+  --color-accent-strong: oklch(66% 0.2 42); /* orange-500 family */
+  --color-accent-glow: oklch(70% 0.18 47 / 0.16);
+
+  /* ----- Motion ----- */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-fast: 160ms;
+  --dur-mid: 320ms;
+  --dur-slow: 700ms;
 }
 
 html,
@@ -12,4 +36,89 @@ body,
 
 body {
   margin: 0;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Atmospheric backdrop: a warm radial bloom up top + a faint grid, fixed
+   behind everything. Pure CSS — no assets, no extra DOM cost on scroll. */
+.cw-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      120% 80% at 50% -10%,
+      var(--color-accent-glow) 0%,
+      transparent 55%
+    ),
+    radial-gradient(
+      80% 60% at 85% 0%,
+      oklch(60% 0.12 47 / 0.07) 0%,
+      transparent 50%
+    ),
+    var(--color-paper);
+}
+
+.cw-backdrop::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(to right, oklch(50% 0.01 286 / 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, oklch(50% 0.01 286 / 0.04) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(120% 100% at 50% 0%, #000 0%, transparent 70%);
+}
+
+/* ----- Reveal animation (staggered) ----- */
+@keyframes cw-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.cw-rise {
+  animation: cw-rise var(--dur-slow) var(--ease-out) both;
+}
+
+/* ----- Accent shimmer for the wordmark ----- */
+@keyframes cw-shimmer {
+  to {
+    background-position: 200% center;
+  }
+}
+
+.cw-wordmark {
+  background: linear-gradient(
+    100deg,
+    var(--color-accent-strong) 0%,
+    var(--color-accent) 30%,
+    oklch(85% 0.12 60) 50%,
+    var(--color-accent) 70%,
+    var(--color-accent-strong) 100%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: cw-shimmer 6s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cw-rise {
+    animation: none;
+  }
+  .cw-wordmark {
+    animation: none;
+  }
+  * {
+    transition-duration: 0.01ms !important;
+  }
 }
