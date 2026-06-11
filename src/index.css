@@ -1,21 +1,42 @@
 @import "tailwindcss";
+@import "@fontsource-variable/fraunces/index.css";
+@import "@fontsource/inter/400.css";
+@import "@fontsource/inter/600.css";
+@import "@fontsource/jetbrains-mono/700.css";
 
 :root {
   color-scheme: dark;
 
-  /* ----- Color tokens (brand-preserving: zinc base + orange accent) ----- */
-  --color-paper: #09090b; /* zinc-950 */
-  --color-surface: oklch(21% 0.006 286);
-  --color-surface-2: oklch(25% 0.006 286);
-  --color-hairline: oklch(30% 0.006 286);
-  --color-ink: oklch(98% 0 0);
-  --color-ink-soft: oklch(72% 0.01 286);
-  --color-ink-mute: oklch(55% 0.01 286);
-  --color-accent: oklch(70% 0.18 47); /* orange-400 family */
-  --color-accent-strong: oklch(66% 0.2 42); /* orange-500 family */
-  --color-accent-glow: oklch(70% 0.18 47 / 0.16);
+  /* === AI Wrapped design tokens === */
 
-  /* ----- Motion ----- */
+  /* Base */
+  --aw-paper:        oklch(20% 0.012 60);
+  --aw-surface:      oklch(24% 0.010 58);
+  --aw-surface-2:    oklch(28% 0.010 58);
+  --aw-hairline:     oklch(35% 0.010 58);
+
+  /* Ink */
+  --aw-ink:          oklch(94% 0.020 80);
+  --aw-ink-soft:     oklch(78% 0.015 75);
+  --aw-ink-mute:     oklch(58% 0.010 75);
+
+  /* Accent — coral / terracotta */
+  --aw-coral:        oklch(70% 0.170 40);
+  --aw-coral-strong: oklch(66% 0.190 38);
+  --aw-coral-glow:   oklch(70% 0.170 40 / 0.18);
+  --aw-coral-shadow: oklch(70% 0.170 40 / 0.60);
+
+  /* Per-provider tints */
+  --aw-claude:       oklch(68% 0.14 42);
+  --aw-chatgpt:      oklch(65% 0.12 155);
+  --aw-gemini:       oklch(65% 0.14 250);
+  --aw-grok:         oklch(75% 0.00 0);
+  --aw-codex:        oklch(70% 0.08 240);
+
+  /* Grain opacity */
+  --aw-grain-opacity: 0.04;
+
+  /* Motion */
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
   --dur-fast: 160ms;
@@ -31,13 +52,28 @@ body,
 
 body {
   margin: 0;
+  background-color: var(--aw-paper);
+  color: var(--aw-ink);
+  font-family: "Inter", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
 
-/* Atmospheric backdrop: a warm radial bloom up top + a faint grid, fixed
-   behind everything. Pure CSS — no assets, no extra DOM cost on scroll. */
-.cw-backdrop {
+/* Display font utility */
+.font-display {
+  font-family: "Fraunces Variable", "Fraunces", Georgia, serif;
+  font-variation-settings: "opsz" 144;
+}
+
+/* Mono stat numbers */
+.font-stat {
+  font-family: "JetBrains Mono", "Courier New", monospace;
+  font-weight: 700;
+  font-feature-settings: "tnum" 1;
+}
+
+/* === Background atmosphere === */
+.aw-backdrop {
   position: fixed;
   inset: 0;
   z-index: 0;
@@ -45,33 +81,57 @@ body {
   background:
     radial-gradient(
       120% 80% at 50% -10%,
-      var(--color-accent-glow) 0%,
+      var(--aw-coral-glow) 0%,
       transparent 55%
     ),
     radial-gradient(
       80% 60% at 85% 0%,
-      oklch(60% 0.12 47 / 0.07) 0%,
+      oklch(70% 0.12 47 / 0.07) 0%,
       transparent 50%
     ),
-    var(--color-paper);
+    var(--aw-paper);
 }
 
-.cw-backdrop::after {
-  content: "";
-  position: absolute;
+/* Grain SVG filter applied as overlay */
+.aw-grain {
+  position: fixed;
   inset: 0;
-  background-image:
-    linear-gradient(to right, oklch(50% 0.01 286 / 0.04) 1px, transparent 1px),
-    linear-gradient(to bottom, oklch(50% 0.01 286 / 0.04) 1px, transparent 1px);
-  background-size: 56px 56px;
-  mask-image: radial-gradient(120% 100% at 50% 0%, #000 0%, transparent 70%);
+  z-index: 1;
+  pointer-events: none;
+  opacity: var(--aw-grain-opacity);
+  filter: url(#aw-grain-filter);
+  background-color: var(--aw-ink);
 }
 
-/* ----- Reveal animation (staggered) ----- */
-@keyframes cw-rise {
+/* === Drop-shadow display text treatment === */
+.aw-headline-shadow {
+  text-shadow:
+    4px 4px 0 var(--aw-coral-shadow),
+    -2px -2px 0 oklch(94% 0.020 80 / 0.15);
+}
+
+/* === Sticker / skewed chrome === */
+.aw-sticker {
+  transform: rotate(-2deg);
+  display: inline-block;
+}
+
+/* === Dashed drop zone === */
+.aw-dropzone {
+  border: 2px dashed var(--aw-coral);
+  border-radius: 16px;
+  background: oklch(70% 0.17 40 / 0.04);
+}
+
+.aw-dropzone:hover {
+  background: oklch(70% 0.17 40 / 0.08);
+}
+
+/* === Reveal animation (fade-up) === */
+@keyframes aw-rise {
   from {
     opacity: 0;
-    transform: translateY(14px);
+    transform: translateY(16px);
   }
   to {
     opacity: 1;
@@ -79,41 +139,39 @@ body {
   }
 }
 
-.cw-rise {
-  animation: cw-rise var(--dur-slow) var(--ease-out) both;
+.aw-rise {
+  animation: aw-rise var(--dur-slow) var(--ease-out) both;
 }
 
-/* ----- Accent shimmer for the wordmark ----- */
-@keyframes cw-shimmer {
-  to {
-    background-position: 200% center;
-  }
+/* === Typography scale === */
+.aw-display-xl {
+  font-size: clamp(3rem, 8vw, 6rem);
+  font-weight: 900;
+  line-height: 0.95;
+  letter-spacing: -0.02em;
 }
 
-.cw-wordmark {
-  background: linear-gradient(
-    100deg,
-    var(--color-accent-strong) 0%,
-    var(--color-accent) 30%,
-    oklch(85% 0.12 60) 50%,
-    var(--color-accent) 70%,
-    var(--color-accent-strong) 100%
-  );
-  background-size: 200% auto;
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  animation: cw-shimmer 6s linear infinite;
+.aw-display-lg {
+  font-size: clamp(2rem, 5vw, 3rem);
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: -0.015em;
 }
 
+.aw-display-md {
+  font-size: clamp(1.5rem, 3.5vw, 2.25rem);
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+}
+
+/* === Reduced motion === */
 @media (prefers-reduced-motion: reduce) {
-  .cw-rise {
-    animation: none;
-  }
-  .cw-wordmark {
+  .aw-rise {
     animation: none;
   }
   * {
-    transition-duration: 0.01ms !important;
+    transition-duration: 150ms !important;
+    animation-duration: 150ms !important;
   }
 }
