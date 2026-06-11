@@ -13,6 +13,10 @@ import { SlideTokens } from "./slides/SlideTokens";
 import { SlideRhythm } from "./slides/SlideRhythm";
 import { SlideProviderSplit } from "./slides/SlideProviderSplit";
 import { SlideCodingVsChat } from "./slides/SlideCodingVsChat";
+import { SlideProjects } from "./slides/SlideProjects";
+import { SlideTools } from "./slides/SlideTools";
+import { SlideYourWords } from "./slides/SlideYourWords";
+import { SlideModelWords } from "./slides/SlideModelWords";
 import { SlideHighlights } from "./slides/SlideHighlights";
 import { SlideShare } from "./slides/SlideShare";
 import type { WrappedStats } from "../../lib/types";
@@ -140,9 +144,33 @@ export function ScrollMode({ stats, allStats, onReset, onSwitchToPresent }: Scro
         </ScrollSection>
       )}
 
+      {stats.projectStats && stats.projectStats.length > 0 && (
+        <ScrollSection>
+          {(v) => <SlideProjects stats={stats} isVisible={v} />}
+        </ScrollSection>
+      )}
+
+      {stats.toolStats && stats.toolStats.topTools.length > 0 && (
+        <ScrollSection>
+          {(v) => <SlideTools stats={stats} isVisible={v} />}
+        </ScrollSection>
+      )}
+
       {stats.hourHistogram && (
         <ScrollSection>
           {(v) => <SlideRhythm stats={stats} isVisible={v} />}
+        </ScrollSection>
+      )}
+
+      {stats.wordStats && stats.wordStats.userTopWords.length > 0 && (
+        <ScrollSection>
+          {(v) => <SlideYourWords stats={stats} isVisible={v} />}
+        </ScrollSection>
+      )}
+
+      {stats.wordStats && stats.wordStats.perModelTopWords.length > 0 && (
+        <ScrollSection>
+          {(v) => <SlideModelWords stats={stats} isVisible={v} />}
         </ScrollSection>
       )}
 

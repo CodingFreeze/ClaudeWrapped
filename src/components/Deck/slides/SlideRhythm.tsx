@@ -30,6 +30,10 @@ export function SlideRhythm({ stats, isVisible }: SlideRhythmProps) {
         sups.weekendWarrior && "Weekend Warrior",
         sups.marathoner && "Marathoner",
         sups.tokenBurner && "Token Burner",
+        sups.polyglot && "Polyglot",
+        sups.toolMaster && "Tool Master",
+        sups.wordsmith && "Wordsmith",
+        sups.projectHopper && "Project Hopper",
       ].filter((s): s is string => Boolean(s))
     : [];
 

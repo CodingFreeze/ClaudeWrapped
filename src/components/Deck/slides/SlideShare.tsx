@@ -142,6 +142,33 @@ export function SlideShare({ stats, isVisible, onReset }: SlideShareProps) {
           </p>
         )}
 
+        {stats.projectStats && stats.projectStats.length > 0 && (
+          <p className="text-xs mb-1" style={{ color: "var(--aw-ink-mute)" }}>
+            Top project:{" "}
+            <span className="font-stat" style={{ color: "var(--aw-ink-soft)" }}>
+              {stats.projectStats[0].name.split("/").slice(-1)[0]}
+            </span>
+          </p>
+        )}
+
+        {stats.wordStats && stats.wordStats.userTopWords.length > 0 && (
+          <p className="text-xs mb-1" style={{ color: "var(--aw-ink-mute)" }}>
+            Top word:{" "}
+            <span className="font-stat" style={{ color: "var(--aw-coral)" }}>
+              {stats.wordStats.userTopWords[0].word}
+            </span>
+          </p>
+        )}
+
+        {stats.toolStats && stats.toolStats.totalInvocations > 0 && (
+          <p className="text-xs mb-3" style={{ color: "var(--aw-ink-mute)" }}>
+            <span className="font-stat" style={{ color: "var(--aw-ink-soft)" }}>
+              {stats.toolStats.totalInvocations.toLocaleString()}
+            </span>{" "}
+            tool calls
+          </p>
+        )}
+
         {badges.length > 0 && (
           <div className="flex flex-wrap justify-center gap-1.5">
             {badges.map((b) => (

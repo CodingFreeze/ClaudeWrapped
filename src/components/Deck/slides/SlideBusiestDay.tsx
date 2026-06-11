@@ -19,10 +19,11 @@ export function SlideBusiestDay({ stats, isVisible }: SlideBusiestDayProps) {
 
   const streakCount = useCountUp(streak.longestDays, 1200, isVisible);
   const busiestCount = useCountUp(streak.busiestCount, 1000, isVisible);
+  const extras = stats.extras;
 
   return (
     <div
-      className="relative flex h-full flex-col justify-center gap-10 px-8 py-16"
+      className="relative flex h-full flex-col justify-center gap-8 px-8 py-14"
       style={{ background: "var(--aw-paper)" }}
     >
       <div
@@ -96,6 +97,41 @@ export function SlideBusiestDay({ stats, isVisible }: SlideBusiestDayProps) {
           Starting {formatFullDate(streak.longestStart)}
         </motion.p>
       </div>
+
+      {/* Extras row: busiest weekday, active days, avg/day */}
+      {extras && (
+        <motion.div
+          className="relative z-10 flex flex-wrap gap-5"
+          initial={{ opacity: 0, y: 12 }}
+          animate={isVisible ? { opacity: 1, y: 0 } : { opacity: 0, y: 12 }}
+          transition={{ ...springRelaxed, delay: 0.75 }}
+        >
+          <div className="flex flex-col">
+            <span className="font-stat text-xl" style={{ color: "var(--aw-coral)" }}>
+              {extras.busiestWeekdayName}
+            </span>
+            <span className="text-[10px] uppercase tracking-wide" style={{ color: "var(--aw-ink-mute)" }}>
+              busiest weekday
+            </span>
+          </div>
+          <div className="flex flex-col">
+            <span className="font-stat text-xl" style={{ color: "var(--aw-ink)" }}>
+              {extras.totalActiveDays}
+            </span>
+            <span className="text-[10px] uppercase tracking-wide" style={{ color: "var(--aw-ink-mute)" }}>
+              active days
+            </span>
+          </div>
+          <div className="flex flex-col">
+            <span className="font-stat text-xl" style={{ color: "var(--aw-ink)" }}>
+              {extras.avgMessagesPerActiveDay}
+            </span>
+            <span className="text-[10px] uppercase tracking-wide" style={{ color: "var(--aw-ink-mute)" }}>
+              avg msgs / day
+            </span>
+          </div>
+        </motion.div>
+      )}
     </div>
   );
 }

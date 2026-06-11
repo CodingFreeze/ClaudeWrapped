@@ -53,9 +53,11 @@ function BigStat({
 }
 
 export function SlideTotals({ stats, isVisible }: SlideTotalsProps) {
+  const extras = stats.extras;
+
   return (
     <div
-      className="relative flex h-full flex-col items-center justify-center gap-12 px-8 py-16"
+      className="relative flex h-full flex-col items-center justify-center gap-10 px-8 py-14"
       style={{ background: "var(--aw-paper)" }}
     >
       <div
@@ -105,6 +107,47 @@ export function SlideTotals({ stats, isVisible }: SlideTotalsProps) {
             <> · {stats.assistantMessageCount.toLocaleString()} from AI</>
           )}
         </motion.p>
+      )}
+
+      {/* Extras: longest session + thinking blocks */}
+      {extras && (extras.longestSessionMessages > 0 || extras.thinkingBlockCount > 0) && (
+        <motion.div
+          className="relative z-10 flex flex-wrap justify-center gap-6"
+          initial={{ opacity: 0, y: 12 }}
+          animate={isVisible ? { opacity: 1, y: 0 } : { opacity: 0, y: 12 }}
+          transition={{ ...springRelaxed, delay: 0.8 }}
+        >
+          {extras.longestSessionMessages > 0 && (
+            <div className="flex flex-col items-center">
+              <span className="font-stat text-xl" style={{ color: "var(--aw-coral)" }}>
+                {extras.longestSessionMessages}
+              </span>
+              <span className="text-[10px] uppercase tracking-wide" style={{ color: "var(--aw-ink-mute)" }}>
+                longest session msgs
+              </span>
+            </div>
+          )}
+          {extras.thinkingBlockCount > 0 && (
+            <div className="flex flex-col items-center">
+              <span className="font-stat text-xl" style={{ color: "var(--aw-ink)" }}>
+                {extras.thinkingBlockCount.toLocaleString()}
+              </span>
+              <span className="text-[10px] uppercase tracking-wide" style={{ color: "var(--aw-ink-mute)" }}>
+                thinking blocks
+              </span>
+            </div>
+          )}
+          {extras.firstSessionDate && (
+            <div className="flex flex-col items-center">
+              <span className="font-stat text-xl" style={{ color: "var(--aw-ink)" }}>
+                {extras.firstSessionDate}
+              </span>
+              <span className="text-[10px] uppercase tracking-wide" style={{ color: "var(--aw-ink-mute)" }}>
+                first session
+              </span>
+            </div>
+          )}
+        </motion.div>
       )}
     </div>
   );

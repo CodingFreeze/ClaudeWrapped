@@ -15,6 +15,10 @@ import { SlideTokens } from "./slides/SlideTokens";
 import { SlideRhythm } from "./slides/SlideRhythm";
 import { SlideProviderSplit } from "./slides/SlideProviderSplit";
 import { SlideCodingVsChat } from "./slides/SlideCodingVsChat";
+import { SlideProjects } from "./slides/SlideProjects";
+import { SlideTools } from "./slides/SlideTools";
+import { SlideYourWords } from "./slides/SlideYourWords";
+import { SlideModelWords } from "./slides/SlideModelWords";
 import { SlideHighlights } from "./slides/SlideHighlights";
 import { SlideShare } from "./slides/SlideShare";
 import type { WrappedStats } from "../../lib/types";
@@ -77,8 +81,20 @@ function buildSlides(
     ...(stats.codingStats && stats.codingStats.topProjects.length >= 3
       ? [{ id: "coding", label: "Coding stats and top projects", node: <SlideCodingVsChat stats={stats} isVisible={true} /> }]
       : []),
+    ...(stats.projectStats && stats.projectStats.length > 0
+      ? [{ id: "projects", label: "Where the work happened", node: <SlideProjects stats={stats} isVisible={true} /> }]
+      : []),
+    ...(stats.toolStats && stats.toolStats.topTools.length > 0
+      ? [{ id: "tools", label: "Your toolbelt", node: <SlideTools stats={stats} isVisible={true} /> }]
+      : []),
     ...(stats.hourHistogram
       ? [{ id: "rhythm", label: "Activity by hour", node: <SlideRhythm stats={stats} isVisible={true} /> }]
+      : []),
+    ...(stats.wordStats && stats.wordStats.userTopWords.length > 0
+      ? [{ id: "your-words", label: "Your vocabulary", node: <SlideYourWords stats={stats} isVisible={true} /> }]
+      : []),
+    ...(stats.wordStats && stats.wordStats.perModelTopWords.length > 0
+      ? [{ id: "model-words", label: "What the models kept saying", node: <SlideModelWords stats={stats} isVisible={true} /> }]
       : []),
     ...(allStats.length >= 2
       ? [{ id: "highlights", label: "Per-provider highlights", node: <SlideHighlights allStats={allStats} isVisible={true} /> }]
