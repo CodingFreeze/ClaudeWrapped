@@ -3,7 +3,7 @@
 // ---------------------------------------------------------------------------
 
 import { useEffect, useRef, useState } from "react";
-import { motion } from "motion/react";
+import { motion, useReducedMotion } from "motion/react";
 import { SlideIntro } from "./slides/SlideIntro";
 import { SlideTotals } from "./slides/SlideTotals";
 import { SlideBusiestMonth } from "./slides/SlideBusiestMonth";
@@ -13,6 +13,7 @@ import { SlideTokens } from "./slides/SlideTokens";
 import { SlideRhythm } from "./slides/SlideRhythm";
 import { SlideProviderSplit } from "./slides/SlideProviderSplit";
 import { SlideCodingVsChat } from "./slides/SlideCodingVsChat";
+import { SlideHighlights } from "./slides/SlideHighlights";
 import { SlideShare } from "./slides/SlideShare";
 import type { WrappedStats } from "../../lib/types";
 
@@ -25,6 +26,7 @@ interface ScrollSectionProps {
 function ScrollSection({ children }: ScrollSectionProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
+  const prefersReducedMotion = useReducedMotion();
 
   useEffect(() => {
     const el = ref.current;
@@ -42,13 +44,20 @@ function ScrollSection({ children }: ScrollSectionProps) {
     return () => obs.disconnect();
   }, []);
 
+  const enterAnim = prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: 40 };
+  const visibleAnim = prefersReducedMotion ? { opacity: 1 } : { opacity: 1, y: 0 };
+  const transition = prefersReducedMotion
+    ? { duration: 0.15, ease: "linear" as const }
+    : springRelaxed;
+
   return (
     <motion.section
       ref={ref}
       className="min-h-screen w-full"
-      initial={{ opacity: 0, y: 40 }}
-      animate={visible ? { opacity: 1, y: 0 } : { opacity: 0, y: 40 }}
-      transition={springRelaxed}
+      role="region"
+      initial={enterAnim}
+      animate={visible ? visibleAnim : enterAnim}
+      transition={transition}
     >
       {children(visible)}
     </motion.section>
@@ -134,6 +143,12 @@ export function ScrollMode({ stats, allStats, onReset, onSwitchToPresent }: Scro
       {stats.hourHistogram && (
         <ScrollSection>
           {(v) => <SlideRhythm stats={stats} isVisible={v} />}
+        </ScrollSection>
+      )}
+
+      {allStats.length >= 2 && (
+        <ScrollSection>
+          {(v) => <SlideHighlights allStats={allStats} isVisible={v} />}
         </ScrollSection>
       )}
 
