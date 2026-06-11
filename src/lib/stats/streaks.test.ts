@@ -80,4 +80,33 @@ describe("computeStreak", () => {
     const result = computeStreak(daily);
     expect(result?.longestDays).toBe(1);
   });
+
+  it("two isolated active days: longestDays=1, longestStart is the earliest", () => {
+    const daily = [
+      { date: "2025-05-01", messages: 3 },
+      { date: "2025-05-03", messages: 5 }, // gap of 2 days
+    ];
+    const result = computeStreak(daily);
+    expect(result?.longestDays).toBe(1);
+    expect(result?.longestStart).toBe("2025-05-01");
+  });
+
+  it("multiple equal-length runs keep the EARLIEST start", () => {
+    const daily = [
+      { date: "2025-01-01", messages: 2 },
+      { date: "2025-01-02", messages: 2 },
+      // gap
+      { date: "2025-02-01", messages: 5 },
+      { date: "2025-02-02", messages: 5 },
+    ];
+    const result = computeStreak(daily);
+    expect(result?.longestDays).toBe(2);
+    expect(result?.longestStart).toBe("2025-01-01");
+  });
+
+  it("single active day returns longestDays=1 and correct longestStart", () => {
+    const result = computeStreak([{ date: "2025-06-10", messages: 7 }]);
+    expect(result?.longestDays).toBe(1);
+    expect(result?.longestStart).toBe("2025-06-10");
+  });
 });
