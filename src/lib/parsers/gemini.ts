@@ -93,10 +93,11 @@ function parseGeminiData(data: unknown, fileSize: number): WrappedStats {
     range: { start: rangeStart, end: rangeEnd },
     sessionCount: itemCount,
     conversationCount: itemCount,
-    // Each activity item counts as one turn (role unknown in Takeout format)
+    // Each activity item in Takeout is a user prompt only (no assistant turns
+    // are exported). Do not fabricate a 50/50 split.
     messageCount: itemCount,
-    userMessageCount: Math.ceil(itemCount / 2),
-    assistantMessageCount: Math.floor(itemCount / 2),
+    userMessageCount: itemCount,
+    assistantMessageCount: 0,
     monthlySeries,
     dailySeries,
     hourHistogram,

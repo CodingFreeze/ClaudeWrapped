@@ -100,8 +100,10 @@ export function SlideTotals({ stats, isVisible }: SlideTotalsProps) {
           animate={isVisible ? { opacity: 1 } : { opacity: 0 }}
           transition={{ ...springRelaxed, delay: 0.6 }}
         >
-          {stats.userMessageCount.toLocaleString()} from you ·{" "}
-          {stats.assistantMessageCount.toLocaleString()} from AI
+          {stats.userMessageCount.toLocaleString()} from you
+          {stats.assistantMessageCount > 0 && (
+            <> · {stats.assistantMessageCount.toLocaleString()} from AI</>
+          )}
         </motion.p>
       )}
     </div>
