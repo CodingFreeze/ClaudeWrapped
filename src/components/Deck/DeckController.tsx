@@ -206,8 +206,15 @@ export function DeckController({ stats, allStats, onReset, onToggleScroll }: Dec
   // Keyboard navigation
   const handleKey = useCallback(
     (e: KeyboardEvent) => {
-      // Only handle if focus is inside the deck container
-      if (containerRef.current && !containerRef.current.contains(document.activeElement)) {
+      // Handle keys when focus is inside the deck or nowhere in particular
+      // (body). Only yield when an element outside the deck has focus.
+      const active = document.activeElement;
+      if (
+        containerRef.current &&
+        active &&
+        active !== document.body &&
+        !containerRef.current.contains(active)
+      ) {
         return;
       }
 
@@ -225,6 +232,11 @@ export function DeckController({ stats, allStats, onReset, onToggleScroll }: Dec
     },
     [deck, onReset],
   );
+
+  // Move focus into the deck on mount so keyboard navigation works immediately
+  useEffect(() => {
+    containerRef.current?.focus();
+  }, []);
 
   useEffect(() => {
     window.addEventListener("keydown", handleKey);
@@ -262,7 +274,8 @@ export function DeckController({ stats, allStats, onReset, onToggleScroll }: Dec
   return (
     <div
       ref={containerRef}
-      className="relative h-full w-full overflow-hidden"
+      tabIndex={-1}
+      className="relative h-full w-full overflow-hidden outline-none"
       style={{ background: "var(--aw-paper)" }}
       role="region"
       aria-label="AI Wrapped deck"

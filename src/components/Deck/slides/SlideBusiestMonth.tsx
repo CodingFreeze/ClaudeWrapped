@@ -94,6 +94,7 @@ export function SlideBusiestMonth({ stats, isVisible }: SlideBusiestMonthProps) 
                   style={{
                     background: isActive ? "var(--aw-coral)" : "var(--aw-surface-2)",
                     borderRadius: "4px 4px 0 0",
+                    height: "100%", // scaleY needs a real height to scale from
                   }}
                   initial={{ scaleY: 0, originY: 1 }}
                   animate={

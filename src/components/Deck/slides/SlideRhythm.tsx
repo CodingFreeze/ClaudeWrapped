@@ -75,17 +75,20 @@ export function SlideRhythm({ stats, isVisible }: SlideRhythmProps) {
           const isPeakHour = v === maxVal;
           return (
             <div key={h} className="flex-1 flex flex-col items-center gap-0.5">
-              <motion.div
-                className="w-full rounded-t"
-                style={{
-                  background: isPeakHour ? "var(--aw-coral)" : "var(--aw-surface-2)",
-                  borderRadius: "2px 2px 0 0",
-                }}
-                initial={{ scaleY: 0, originY: 1 }}
-                animate={isVisible ? { scaleY: frac || 0.02, originY: 1 } : { scaleY: 0, originY: 1 }}
-                transition={{ ...springBouncy, delay: 0.35 + h * 0.015 }}
-                title={`${h}:00 — ${v.toLocaleString()} msgs`}
-              />
+              <div className="w-full flex items-end" style={{ height: 64 }}>
+                <motion.div
+                  className="w-full rounded-t"
+                  style={{
+                    background: isPeakHour ? "var(--aw-coral)" : "var(--aw-surface-2)",
+                    borderRadius: "2px 2px 0 0",
+                    height: "100%", // scaleY needs a real height to scale from
+                  }}
+                  initial={{ scaleY: 0, originY: 1 }}
+                  animate={isVisible ? { scaleY: frac || 0.02, originY: 1 } : { scaleY: 0, originY: 1 }}
+                  transition={{ ...springBouncy, delay: 0.35 + h * 0.015 }}
+                  title={`${h}:00 — ${v.toLocaleString()} msgs`}
+                />
+              </div>
               {HOUR_LABELS[h] && (
                 <span className="text-[8px]" style={{ color: "var(--aw-ink-mute)" }}>
                   {HOUR_LABELS[h]}
