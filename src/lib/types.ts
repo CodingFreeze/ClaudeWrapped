@@ -1,16 +1,11 @@
 // ---------------------------------------------------------------------------
-// Shared types for the two data sources.
-//
-// NOTE: The Claude.ai export shape below is based on the documented structure
-// the user provided (array of conversations, each with chat_messages[] having
-// sender / text / created_at). The Claude Code .jsonl shape is intentionally
-// NOT modeled yet — we discover it first (see jsonlSchema.ts) and only commit
-// a typed schema once the user confirms the real fields. See HANDOFF.md.
+// Shared types — normalized WrappedStats model + app state machine.
 // ---------------------------------------------------------------------------
 
+// Keep legacy types for backward compat until parsers are fully migrated.
 import type { MonthlyDatum } from "./wrapped";
 
-// ----- Source 1: Claude.ai export ZIP (conversations.json) -----
+// ----- Legacy: Claude.ai export ZIP (conversations.json) -----
 
 export interface ClaudeAiMessage {
   sender?: string;
@@ -34,35 +29,137 @@ export interface ClaudeAiParseResult {
   conversationCount: number;
   messageCount: number;
   senderCounts: Record<string, number>;
-  /** Messages bucketed by 'YYYY-MM', sorted ascending (drives the wrapped card). */
   monthlySeries: MonthlyDatum[];
   earliest?: string;
   latest?: string;
-  /** Non-fatal problems encountered while parsing. */
   warnings: string[];
 }
 
-// ----- Source 2: Claude Code .jsonl logs (schema discovery) -----
+// ----- Legacy: Claude Code .jsonl logs (schema discovery) -----
 
 export interface JsonlDiscoveryResult {
   source: "claude-code";
-  /** Number of .jsonl files seen in the dropped folder. */
   fileCount: number;
-  /** Total non-empty lines across all files. */
   lineCount: number;
-  /** Lines that successfully parsed as JSON. */
   parsedCount: number;
-  /** Lines that failed JSON.parse. */
   parseErrorCount: number;
-  /** Count of each distinct top-level key seen across sampled events. */
   keyCounts: Record<string, number>;
-  /** Count of each distinct `type` value seen across sampled events. */
   typeCounts: Record<string, number>;
-  /** How many lines were actually sampled per file (cap applied). */
   sampledLineCount: number;
-  /** A few raw sample events, pretty-printed, for eyeballing the shape. */
   samples: string[];
-  /** Per-file breakdown for context. */
   files: Array<{ name: string; lines: number; sampled: number }>;
   warnings: string[];
 }
+
+// ---------------------------------------------------------------------------
+// New: Normalized multi-provider model
+// ---------------------------------------------------------------------------
+
+export type Provider =
+  | "claude-code"
+  | "claude-ai"
+  | "chatgpt"
+  | "codex"
+  | "grok"
+  | "gemini";
+
+export interface WrappedStats {
+  provider: Provider | "merged" | "coding";
+  range: { start: string; end: string };
+
+  // Core counts
+  sessionCount: number;
+  conversationCount: number;
+  messageCount: number;
+  userMessageCount: number;
+  assistantMessageCount: number;
+  toolUseCount?: number;
+
+  // Time series
+  monthlySeries: { month: string; messages: number }[];
+  dailySeries?: { date: string; messages: number }[];
+  hourHistogram?: number[];
+
+  // Model breakdown (Tier 1 only)
+  modelBreakdown?: { model: string; messages: number; tokens?: number }[];
+
+  // Token/cost (Tier 1 only)
+  tokenUsage?: {
+    input: number;
+    output: number;
+    cacheRead?: number;
+    cacheCreate?: number;
+    estimated: boolean;
+    estimatedCostUSD?: number;
+  };
+
+  // Streak
+  streak?: {
+    longestDays: number;
+    longestStart: string;
+    busiestDate: string;
+    busiestCount: number;
+  };
+
+  // Coding-specific (CC + Codex)
+  codingStats?: {
+    topProjects: { name: string; sessions: number }[];
+    topBranches: { name: string; sessions: number }[];
+    avgSessionDurationMs?: number;
+  };
+
+  // Superlatives
+  superlatives?: {
+    nightOwl: boolean;
+    earlyBird: boolean;
+    weekendWarrior: boolean;
+    marathoner: boolean;
+    tokenBurner?: boolean;
+  };
+
+  // Source metadata
+  source: { fileCount: number; bytes: number; parseWarnings: string[] };
+  isCoding: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// App state machine
+// ---------------------------------------------------------------------------
+
+export interface ProviderImportState {
+  provider: Provider;
+  status: "idle" | "parsing" | "done" | "error";
+  parsed?: number;
+  total?: number;
+  stats?: WrappedStats;
+  error?: string;
+}
+
+export type AppView = "merged" | "coding" | Provider;
+
+export type AppState =
+  | { phase: "idle" }
+  | { phase: "importing"; providers: ProviderImportState[] }
+  | { phase: "processing"; providers: ProviderImportState[] }
+  | {
+      phase: "deck";
+      stats: WrappedStats;
+      allStats: WrappedStats[];
+      view: AppView;
+      mode: "present" | "scroll";
+      slide: number;
+    }
+  | { phase: "share"; stats: WrappedStats };
+
+export type AppAction =
+  | { type: "FILES_DROPPED"; provider: Provider; files: File[] }
+  | { type: "PARSE_PROGRESS"; provider: Provider; parsed: number; total: number }
+  | { type: "PARSE_COMPLETE"; provider: Provider; stats: WrappedStats }
+  | { type: "PARSE_ERROR"; provider: Provider; error: string }
+  | { type: "SET_VIEW"; view: AppView }
+  | { type: "START_DECK" }
+  | { type: "SLIDE_NEXT" }
+  | { type: "SLIDE_PREV" }
+  | { type: "TOGGLE_SCROLL_MODE" }
+  | { type: "GO_SHARE" }
+  | { type: "RESET" };
