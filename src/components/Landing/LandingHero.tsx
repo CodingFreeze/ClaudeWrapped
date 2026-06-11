@@ -84,10 +84,15 @@ export function LandingHero({ year, onYearChange, onTrySample, sampleBusy }: Lan
         </div>
       </div>
 
-      {/* Display headline */}
+      {/* Display headline.
+          The h1 carries the full accessible label "Your year in AI — Wrapped"
+          so screen readers announce the complete brand phrase exactly once.
+          The decorative coral "Wrapped" div is aria-hidden to avoid a
+          double-announcement of that word. */}
       <h1
         className="font-display aw-display-xl mb-3 uppercase"
         style={{ color: "var(--aw-ink)" }}
+        aria-label="Your year in AI — Wrapped"
       >
         Your year{" "}
         <br className="hidden sm:block" />
