@@ -11,7 +11,13 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@fontsource-variable/fraunces": "^5.2.9",
+    "@fontsource/inter": "^5.2.8",
+    "@fontsource/jetbrains-mono": "^5.2.8",
+    "@streamparser/json": "^0.0.22",
+    "html-to-image": "^1.11.13",
     "jszip": "^3.10.1",
+    "motion": "^12.40.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "recharts": "^2.15.0"
