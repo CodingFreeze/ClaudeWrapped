@@ -140,4 +140,87 @@ describe("filterStatsByRange", () => {
       result.messageCount,
     );
   });
+
+  it("projectStats keeps only projects overlapping the range", () => {
+    const stats = makeStats({
+      projectStats: [
+        {
+          name: "early-project",
+          sessions: 10,
+          messages: 100,
+          firstSeen: "2025-01-10",
+          lastSeen: "2025-01-20",
+          activeDays: 5,
+        },
+        {
+          name: "spring-project",
+          sessions: 20,
+          messages: 200,
+          firstSeen: "2025-02-01",
+          lastSeen: "2025-04-15",
+          activeDays: 12,
+        },
+      ],
+    });
+    const result = filterStatsByRange(stats, "2025-02-01", "2025-03-31");
+    expect(result.projectStats?.map((p) => p.name)).toEqual(["spring-project"]);
+  });
+
+  it("extras temporal fields are recomputed from filtered dailySeries", () => {
+    const stats = makeStats({
+      extras: {
+        busiestWeekday: 0,
+        busiestWeekdayName: "Sunday",
+        totalActiveDays: 8,
+        avgMessagesPerActiveDay: 12,
+        longestSessionMessages: 40,
+        longestSessionDate: "2025-06-01",
+        firstSessionDate: "2025-01-10",
+        thinkingBlockCount: 7,
+      },
+    });
+    // Feb 3 (Mon) 12, Feb 4 (Tue) 10, Feb 5 (Wed) 7, Mar 20 (Thu) 15
+    const result = filterStatsByRange(stats, "2025-02-01", "2025-03-31");
+    expect(result.extras?.totalActiveDays).toBe(4);
+    expect(result.extras?.avgMessagesPerActiveDay).toBe(Math.round(44 / 4));
+    expect(result.extras?.firstSessionDate).toBe("2025-02-03");
+    // 2025-03-20 is a Thursday and is the single busiest weekday bucket (15)
+    expect(result.extras?.busiestWeekdayName).toBe("Thursday");
+    // Full-import-only fields are kept as-is (covered by the parseWarning)
+    expect(result.extras?.longestSessionMessages).toBe(40);
+    expect(result.extras?.thinkingBlockCount).toBe(7);
+  });
+
+  it("adds parseWarning when word/tool/project stats are present and range is filtered", () => {
+    const stats = makeStats({
+      toolStats: {
+        topTools: [{ name: "Read", count: 10 }],
+        totalInvocations: 10,
+      },
+    });
+    const result = filterStatsByRange(stats, "2025-02-01", "2025-03-31");
+    expect(
+      result.source.parseWarnings.some((w) => w.includes("full import")),
+    ).toBe(true);
+  });
+
+  it("wordStats and toolStats pass through unchanged on sub-range (full-import values)", () => {
+    const stats = makeStats({
+      wordStats: {
+        userTopWords: [{ word: "refactor", count: 12 }],
+        perModelTopWords: [],
+        totalUserWords: 1000,
+        totalAssistantWords: 3000,
+        distinctUserWords: 400,
+        verbosityRatio: 3,
+      },
+      toolStats: {
+        topTools: [{ name: "Read", count: 10 }],
+        totalInvocations: 10,
+      },
+    });
+    const result = filterStatsByRange(stats, "2025-02-01", "2025-03-31");
+    expect(result.wordStats).toBe(stats.wordStats);
+    expect(result.toolStats).toBe(stats.toolStats);
+  });
 });
