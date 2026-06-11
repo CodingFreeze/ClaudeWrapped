@@ -108,6 +108,44 @@ export interface WrappedStats {
     avgSessionDurationMs?: number;
   };
 
+  // First-class project stats (CC + Codex, top 8 by messages)
+  projectStats?: {
+    name: string;
+    sessions: number;
+    messages: number;
+    firstSeen: string;
+    lastSeen: string;
+    activeDays: number;
+  }[];
+
+  // Word stats (accumulated during parse, no full text retained)
+  wordStats?: {
+    userTopWords: { word: string; count: number }[];
+    perModelTopWords: { model: string; words: { word: string; count: number }[] }[];
+    totalUserWords: number;
+    totalAssistantWords: number;
+    distinctUserWords: number;
+    verbosityRatio: number; // avg assistant words per user word
+  };
+
+  // Tool stats (CC only)
+  toolStats?: {
+    topTools: { name: string; count: number }[];
+    totalInvocations: number;
+  };
+
+  // Extra temporal + session metrics
+  extras?: {
+    busiestWeekday: number;       // 0=Sun … 6=Sat
+    busiestWeekdayName: string;
+    totalActiveDays: number;
+    avgMessagesPerActiveDay: number;
+    longestSessionMessages: number;
+    longestSessionDate: string;
+    firstSessionDate: string;
+    thinkingBlockCount: number;   // CC only — assistant content type "thinking"
+  };
+
   // Superlatives
   superlatives?: {
     nightOwl: boolean;
@@ -115,6 +153,10 @@ export interface WrappedStats {
     weekendWarrior: boolean;
     marathoner: boolean;
     tokenBurner?: boolean;
+    polyglot?: boolean;      // >= 3 distinct models
+    toolMaster?: boolean;    // toolUseCount >= 500
+    wordsmith?: boolean;     // totalUserWords >= 50000
+    projectHopper?: boolean; // >= 5 distinct projects
   };
 
   // Source metadata

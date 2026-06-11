@@ -10,6 +10,10 @@ export interface Superlatives {
   weekendWarrior: boolean;
   marathoner: boolean;
   tokenBurner?: boolean;
+  polyglot?: boolean;
+  toolMaster?: boolean;
+  wordsmith?: boolean;
+  projectHopper?: boolean;
 }
 
 /**
@@ -62,5 +66,17 @@ export function computeSuperlatives(stats: WrappedStats): Superlatives {
     tokenBurner = total > 1_000_000;
   }
 
-  return { nightOwl, earlyBird, weekendWarrior, marathoner, tokenBurner };
+  // Polyglot: >= 3 distinct models
+  const polyglot = (stats.modelBreakdown?.length ?? 0) >= 3;
+
+  // Tool master: toolUseCount >= 500
+  const toolMaster = (stats.toolUseCount ?? 0) >= 500;
+
+  // Wordsmith: totalUserWords >= 50000
+  const wordsmith = (stats.wordStats?.totalUserWords ?? 0) >= 50_000;
+
+  // Project hopper: >= 5 distinct projects
+  const projectHopper = (stats.projectStats?.length ?? 0) >= 5;
+
+  return { nightOwl, earlyBird, weekendWarrior, marathoner, tokenBurner, polyglot, toolMaster, wordsmith, projectHopper };
 }
