@@ -1,9 +1,14 @@
 // ---------------------------------------------------------------------------
 // shareCardExport — html-to-image wrapper + clipboard API.
 // Captures the off-screen ShareCard node and downloads / copies as PNG.
+//
+// connect-src 'self' in vercel.json is required: html-to-image fetches
+// bundled font URLs (same-origin blob: / data: resolved via the Vite asset
+// pipeline) when inlining fonts into the PNG canvas. 'self' allows that
+// same-origin fetch while blocking all external exfiltration.
 // ---------------------------------------------------------------------------
 
-import { toPng } from "html-to-image";
+import { toPng, toBlob } from "html-to-image";
 
 const CARD_W = 1080;
 const CARD_H = 1920;
@@ -40,7 +45,9 @@ export async function downloadShareCard(
 }
 
 /**
- * Copy the share card image to the clipboard using ClipboardItem + canvas.toBlob.
+ * Copy the share card image to the clipboard using ClipboardItem + toBlob.
+ * Uses toBlob directly (no fetch round-trip) so it works in Firefox and
+ * other browsers that block fetch() of data: URLs in clipboard handlers.
  * Returns true on success, false if the Clipboard API is unavailable.
  */
 export async function copyShareCardToClipboard(
@@ -50,14 +57,14 @@ export async function copyShareCardToClipboard(
     return false;
   }
 
-  const dataUrl = await toPng(node, {
+  // toBlob produces the PNG blob directly without a fetch(dataUrl) round-trip,
+  // which Firefox blocks when the data: URL originates from a canvas taint.
+  const blob = await toBlob(node, {
     width: CARD_W,
     height: CARD_H,
   });
 
-  // Convert data URL to Blob
-  const res = await fetch(dataUrl);
-  const blob = await res.blob();
+  if (!blob) return false;
 
   try {
     await navigator.clipboard.write([
