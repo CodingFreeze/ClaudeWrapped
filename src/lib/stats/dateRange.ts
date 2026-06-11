@@ -126,11 +126,19 @@ export function filterStatsByRange(
 
   // --- Imprecise fields (warn but keep) ---------------------------------
   const rangeWarning =
+    "Model/token/word/tool details reflect the full import, not the selected date range.";
+  const legacyRangeWarning =
     "Model/token details reflect the full import, not the selected date range.";
   const existingWarnings = stats.source.parseWarnings;
   const newWarnings =
-    (stats.modelBreakdown || stats.tokenUsage || stats.codingStats) &&
-    !existingWarnings.includes(rangeWarning)
+    (stats.modelBreakdown ||
+      stats.tokenUsage ||
+      stats.codingStats ||
+      stats.wordStats ||
+      stats.toolStats ||
+      stats.projectStats) &&
+    !existingWarnings.includes(rangeWarning) &&
+    !existingWarnings.includes(legacyRangeWarning)
       ? [...existingWarnings, rangeWarning]
       : existingWarnings;
 
@@ -138,6 +146,37 @@ export function filterStatsByRange(
   const sortedDates = filteredDaily.map((d) => d.date).sort();
   const newStart = sortedDates[0] ?? start;
   const newEnd = sortedDates[sortedDates.length - 1] ?? end;
+
+  // --- projectStats: keep only projects whose lifespan overlaps the range.
+  // Per-project counts remain full-import (covered by rangeWarning).
+  const newProjectStats = stats.projectStats?.filter(
+    (p) => p.firstSeen <= end && p.lastSeen >= start,
+  );
+
+  // --- extras: recompute what dailySeries supports exactly; the rest
+  // (longest session, thinking blocks) stays full-import (covered by warning).
+  let newExtras = stats.extras;
+  if (newExtras) {
+    const weekdayTotals = new Array<number>(7).fill(0);
+    for (const d of filteredDaily) {
+      const dow = new Date(d.date + "T00:00:00Z").getUTCDay();
+      weekdayTotals[dow] += d.messages;
+    }
+    const busiestWeekday = weekdayTotals.indexOf(Math.max(...weekdayTotals));
+    const weekdayNames = [
+      "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday",
+    ];
+    const totalActiveDays = filteredDaily.length;
+    newExtras = {
+      ...newExtras,
+      busiestWeekday,
+      busiestWeekdayName: weekdayNames[busiestWeekday],
+      totalActiveDays,
+      avgMessagesPerActiveDay:
+        totalActiveDays > 0 ? Math.round(filteredTotal / totalActiveDays) : 0,
+      firstSessionDate: newStart,
+    };
+  }
 
   const filtered: WrappedStats = {
     ...stats,
@@ -150,6 +189,8 @@ export function filterStatsByRange(
     monthlySeries: clippedMonthly,
     dailySeries: filteredDaily.length > 0 ? filteredDaily : undefined,
     hourHistogram: newHourHistogram,
+    projectStats: newProjectStats,
+    extras: newExtras,
     streak: streakResult
       ? {
           longestDays: streakResult.longestDays,
