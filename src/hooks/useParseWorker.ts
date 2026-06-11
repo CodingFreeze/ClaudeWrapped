@@ -50,26 +50,52 @@ async function parseInline(
 
 export function useParseWorker() {
   const bridgeRef = useRef<WorkerBridge | null>(null);
+  // Generation counter guards against stale results from a superseded parse
+  // call reaching callbacks after a new parse() was already dispatched.
+  const generationRef = useRef(0);
 
   const parse = useCallback(
     (files: File[], provider: Provider, callbacks: ParseCallbacks) => {
       // Terminate any running parse
       bridgeRef.current?.terminate();
 
+      // Advance generation so any in-flight inline promise is discarded.
+      const generation = ++generationRef.current;
+
       const totalBytes = files.reduce((s, f) => s + f.size, 0);
 
       if (totalBytes >= WORKER_THRESHOLD_BYTES) {
-        // Off-thread path
+        // Off-thread path — worker bridge manages its own lifecycle.
         const bridge = new WorkerBridge();
         bridgeRef.current = bridge;
-        bridge.start(files, provider, callbacks);
+        bridge.start(files, provider, {
+          onProgress: (parsed, total) => {
+            if (generationRef.current !== generation) return;
+            callbacks.onProgress(parsed, total);
+          },
+          onResult: (stats) => {
+            if (generationRef.current !== generation) return;
+            callbacks.onResult(stats);
+          },
+          onError: (message) => {
+            if (generationRef.current !== generation) return;
+            callbacks.onError(message);
+          },
+        });
       } else {
-        // Inline path
-        parseInline(files, provider, callbacks.onProgress)
-          .then((stats) => callbacks.onResult(stats))
-          .catch((err) =>
-            callbacks.onError(err instanceof Error ? err.message : String(err)),
-          );
+        // Inline path — check generation in .then/.catch to discard stale results.
+        parseInline(files, provider, (p, t) => {
+          if (generationRef.current !== generation) return;
+          callbacks.onProgress(p, t);
+        })
+          .then((stats) => {
+            if (generationRef.current !== generation) return;
+            callbacks.onResult(stats);
+          })
+          .catch((err) => {
+            if (generationRef.current !== generation) return;
+            callbacks.onError(err instanceof Error ? err.message : String(err));
+          });
       }
     },
     [],

@@ -3,7 +3,7 @@
 // P3: wires all parsers + Web Worker bridge into phase reducer.
 // ---------------------------------------------------------------------------
 
-import { useReducer, useCallback, useState, useRef } from "react";
+import { useReducer, useCallback, useState } from "react";
 import { LandingHero } from "./components/Landing/LandingHero";
 import { ProviderGrid } from "./components/Landing/ProviderGrid";
 import { DropZoneGlobal } from "./components/Landing/DropZoneGlobal";
@@ -179,8 +179,10 @@ function phaseReducer(state: Phase, action: PhaseAction): Phase {
 // Directory traversal helpers for drag-drop of folders
 // ---------------------------------------------------------------------------
 
+const MAX_TRAVERSE_DEPTH = 8;
+
 /** Recursively read all File entries from a DataTransferItemList (directories included). */
-async function traverseEntry(entry: FileSystemEntry): Promise<File[]> {
+async function traverseEntry(entry: FileSystemEntry, depth = 0): Promise<File[]> {
   if (entry.isFile) {
     return new Promise<File[]>((resolve) => {
       (entry as FileSystemFileEntry).file(
@@ -191,24 +193,40 @@ async function traverseEntry(entry: FileSystemEntry): Promise<File[]> {
   }
 
   if (entry.isDirectory) {
+    if (depth >= MAX_TRAVERSE_DEPTH) {
+      console.warn(`traverseEntry: skipping deep subdirectory "${entry.fullPath}" (depth ${depth})`);
+      return [new File(
+        [],
+        `__parse_warning__: directory "${entry.name}" skipped (max depth ${MAX_TRAVERSE_DEPTH} reached)`,
+      )];
+    }
+
     const reader = (entry as FileSystemDirectoryEntry).createReader();
     const allFiles: File[] = [];
 
-    // readEntries returns at most 100 entries per call; loop until empty
+    // readEntries returns at most 100 entries per call; loop until empty.
+    // The error callback resolves rather than rejects so we keep whatever
+    // entries were already collected instead of silently hanging.
     const readAll = (): Promise<void> =>
       new Promise((resolve) => {
         const step = () => {
-          reader.readEntries(async (entries) => {
-            if (entries.length === 0) {
+          reader.readEntries(
+            async (entries) => {
+              if (entries.length === 0) {
+                resolve();
+                return;
+              }
+              for (const child of entries) {
+                const childFiles = await traverseEntry(child, depth + 1);
+                allFiles.push(...childFiles);
+              }
+              step();
+            },
+            (err) => {
+              console.warn("readEntries failed", err);
               resolve();
-              return;
-            }
-            for (const child of entries) {
-              const childFiles = await traverseEntry(child);
-              allFiles.push(...childFiles);
-            }
-            step();
-          });
+            },
+          );
         };
         step();
       });
@@ -253,9 +271,6 @@ export default function App() {
   // Worker bridge for large files
   const { parse: workerParse } = useParseWorker();
 
-  // Track in-flight worker refs to allow cancellation
-  const parseControllers = useRef<Map<Provider, AbortController>>(new Map());
-
   const handleFiles = useCallback(
     (provider: Provider, files: File[]) => {
       dispatch({ type: "FILES_DROPPED", provider });
@@ -288,8 +303,10 @@ export default function App() {
     }, 500);
   }, [sampleBusy]);
 
-  // Avoid unused ref warning
-  void parseControllers;
+  // Stable callbacks — dispatch from useReducer is already stable, so these
+  // never change identity between renders and avoid re-memoising buildSlides.
+  const handleReset = useCallback(() => dispatch({ type: "RESET" }), []);
+  const handleToggleScroll = useCallback(() => dispatch({ type: "TOGGLE_SCROLL" }), []);
 
   // --- Deck mode ---
   if (phase.kind === "deck") {
@@ -299,15 +316,15 @@ export default function App() {
           <DeckController
             stats={phase.stats}
             allStats={phase.allStats}
-            onReset={() => dispatch({ type: "RESET" })}
-            onToggleScroll={() => dispatch({ type: "TOGGLE_SCROLL" })}
+            onReset={handleReset}
+            onToggleScroll={handleToggleScroll}
           />
         ) : (
           <ScrollMode
             stats={phase.stats}
             allStats={phase.allStats}
-            onReset={() => dispatch({ type: "RESET" })}
-            onSwitchToPresent={() => dispatch({ type: "TOGGLE_SCROLL" })}
+            onReset={handleReset}
+            onSwitchToPresent={handleToggleScroll}
           />
         )}
       </div>
