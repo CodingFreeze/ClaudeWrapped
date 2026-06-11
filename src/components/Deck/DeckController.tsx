@@ -3,7 +3,7 @@
 // P4: a11y (focus trap, ARIA live), touch swipe (Pointer Events), reduced-motion.
 // ---------------------------------------------------------------------------
 
-import { useEffect, useCallback, useRef } from "react";
+import { useEffect, useCallback, useRef, useMemo } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { DeckProgress } from "./DeckProgress";
 import { SlideIntro } from "./slides/SlideIntro";
@@ -185,7 +185,10 @@ function useTouchSwipe(
 // ---------------------------------------------------------------------------
 
 export function DeckController({ stats, allStats, onReset, onToggleScroll }: DeckControllerProps) {
-  const slides = buildSlides(stats, allStats, onReset);
+  const slides = useMemo(
+    () => buildSlides(stats, allStats, onReset),
+    [stats, allStats, onReset],
+  );
   const deck = useDeckState(slides.length);
   const containerRef = useRef<HTMLDivElement>(null);
   const prefersReducedMotion = useReducedMotion();
