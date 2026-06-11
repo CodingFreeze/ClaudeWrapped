@@ -3,7 +3,7 @@
 // P3: wires all parsers + Web Worker bridge into phase reducer.
 // ---------------------------------------------------------------------------
 
-import { useReducer, useCallback, useState } from "react";
+import { useReducer, useCallback, useState, useMemo } from "react";
 import { LandingHero } from "./components/Landing/LandingHero";
 import { ProviderGrid } from "./components/Landing/ProviderGrid";
 import { DropZoneGlobal } from "./components/Landing/DropZoneGlobal";
@@ -13,12 +13,16 @@ import { ScrollMode } from "./components/Deck/ScrollMode";
 import { aggregateStats, filterCodingStats } from "./lib/aggregate";
 import { sampleMergedStats } from "./lib/sampleData";
 import { useParseWorker } from "./hooks/useParseWorker";
+import { filterStatsByRange } from "./lib/stats/dateRange";
 import type {
   Provider,
   ProviderImportState,
   WrappedStats,
   AppView,
 } from "./lib/types";
+
+/** Null means "all time"; otherwise a YYYY-MM-DD start/end pair. */
+type DateRange = { start: string; end: string } | null;
 
 // === App state ===
 
@@ -265,7 +269,7 @@ async function getFilesFromDataTransfer(
 
 export default function App() {
   const [phase, dispatch] = useReducer(phaseReducer, { kind: "idle" });
-  const [selectedYear, setSelectedYear] = useState(2025);
+  const [dateRange, setDateRange] = useState<DateRange>(null);
   const [sampleBusy, setSampleBusy] = useState(false);
 
   // Worker bridge for large files
@@ -293,6 +297,7 @@ export default function App() {
   const handleSample = useCallback(() => {
     if (sampleBusy) return;
     setSampleBusy(true);
+    setDateRange(null);
     window.setTimeout(() => {
       dispatch({
         type: "ENTER_DECK",
@@ -305,24 +310,42 @@ export default function App() {
 
   // Stable callbacks — dispatch from useReducer is already stable, so these
   // never change identity between renders and avoid re-memoising buildSlides.
-  const handleReset = useCallback(() => dispatch({ type: "RESET" }), []);
+  const handleReset = useCallback(() => {
+    dispatch({ type: "RESET" });
+    setDateRange(null);
+  }, []);
   const handleToggleScroll = useCallback(() => dispatch({ type: "TOGGLE_SCROLL" }), []);
 
+  // --- Filtered stats: apply dateRange at the single choke point --------
+  const filteredStats = useMemo(() => {
+    if (phase.kind !== "deck") return null;
+    if (!dateRange) return phase.stats;
+    return filterStatsByRange(phase.stats, dateRange.start, dateRange.end);
+  }, [phase, dateRange]);
+
+  const filteredAllStats = useMemo(() => {
+    if (phase.kind !== "deck") return null;
+    if (!dateRange) return phase.allStats;
+    return phase.allStats.map((s) =>
+      filterStatsByRange(s, dateRange.start, dateRange.end),
+    );
+  }, [phase, dateRange]);
+
   // --- Deck mode ---
-  if (phase.kind === "deck") {
+  if (phase.kind === "deck" && filteredStats && filteredAllStats) {
     return (
       <div className="fixed inset-0" style={{ background: "var(--aw-paper)" }}>
         {phase.mode === "present" ? (
           <DeckController
-            stats={phase.stats}
-            allStats={phase.allStats}
+            stats={filteredStats}
+            allStats={filteredAllStats}
             onReset={handleReset}
             onToggleScroll={handleToggleScroll}
           />
         ) : (
           <ScrollMode
-            stats={phase.stats}
-            allStats={phase.allStats}
+            stats={filteredStats}
+            allStats={filteredAllStats}
             onReset={handleReset}
             onSwitchToPresent={handleToggleScroll}
           />
@@ -332,6 +355,16 @@ export default function App() {
   }
 
   const importingView = phase.kind === "importing" ? phase.view : "merged";
+
+  // Derive the data range from all loaded stats (for populating the year selector).
+  const loadedDataRange = useMemo((): { start: string; end: string } | null => {
+    if (phase.kind !== "importing") return null;
+    const done = phase.providers.filter((p) => p.status === "done" && p.stats);
+    if (done.length === 0) return null;
+    const starts = done.map((p) => p.stats!.range.start).sort();
+    const ends = done.map((p) => p.stats!.range.end).sort();
+    return { start: starts[0], end: ends[ends.length - 1] };
+  }, [phase]);
 
   // --- Landing + import ---
   return (
@@ -343,8 +376,9 @@ export default function App() {
       <div className="relative z-10 mx-auto max-w-5xl px-6 py-16 sm:py-20">
         {/* Hero */}
         <LandingHero
-          year={selectedYear}
-          onYearChange={setSelectedYear}
+          dateRange={dateRange}
+          onDateRangeChange={setDateRange}
+          dataRange={loadedDataRange}
           onTrySample={handleSample}
           sampleBusy={sampleBusy}
         />
