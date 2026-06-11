@@ -8,6 +8,7 @@ import { buildMonthlySeries, buildDailySeries } from "../stats/normalize";
 import { buildHourHistogram } from "../stats/histogram";
 import { computeStreak } from "../stats/streaks";
 import { computeSuperlatives } from "../stats/superlatives";
+import { extractWords, accumulateWords, topWords } from "../stats/wordExtract";
 
 // ---------------------------------------------------------------------------
 // JSONL streaming (same §6.5 pattern as claudeCode.ts)
@@ -73,6 +74,7 @@ interface CodexSessionResult {
   models: string[];
   totalDurationMs: number;
   timestamps: string[];
+  userWordPayloads: string[];
 }
 
 async function parseCodexSessionFile(file: File): Promise<CodexSessionResult> {
@@ -88,6 +90,7 @@ async function parseCodexSessionFile(file: File): Promise<CodexSessionResult> {
     models: [],
     totalDurationMs: 0,
     timestamps: [],
+    userWordPayloads: [],
   };
 
   const modelSet = new Set<string>();
@@ -128,6 +131,10 @@ async function parseCodexSessionFile(file: File): Promise<CodexSessionResult> {
 
       if (subtype === "user_message") {
         result.userMessages++;
+        // Extract user words from payload text
+        if (typeof payload.text === "string") {
+          result.userWordPayloads.push(payload.text);
+        }
       }
       if (subtype === "agent_message") {
         result.agentMessages++;
@@ -181,6 +188,18 @@ export async function parseCodexFiles(
   const cwdCounts = new Map<string, number>();
   const branchCounts = new Map<string, number>();
 
+  // Word accumulation
+  const globalUserWords = new Map<string, number>();
+
+  // Project stats
+  const projectStatsMap = new Map<string, {
+    sessions: number;
+    messages: number;
+    firstSeen: string;
+    lastSeen: string;
+    activeDays: Set<string>;
+  }>();
+
   for (let i = 0; i < jsonlFiles.length; i++) {
     const file = jsonlFiles[i];
     try {
@@ -192,6 +211,11 @@ export async function parseCodexFiles(
       totalDurationMs += session.totalDurationMs;
       allTimestamps.push(...session.timestamps);
 
+      // Accumulate user words
+      for (const text of session.userWordPayloads) {
+        accumulateWords(globalUserWords, extractWords(text));
+      }
+
       for (const model of session.models) {
         modelCounts.set(model, (modelCounts.get(model) ?? 0) + 1);
       }
@@ -200,6 +224,26 @@ export async function parseCodexFiles(
         const parts = session.cwd.replace(/\/$/, "").split("/").filter(Boolean);
         const projectName = parts.slice(-2).join("/") || session.cwd;
         cwdCounts.set(projectName, (cwdCounts.get(projectName) ?? 0) + 1);
+
+        // Project stats
+        const sessionDate = session.firstTimestamp.slice(0, 10);
+        const sessionMsgs = session.userMessages + session.agentMessages;
+        const existing = projectStatsMap.get(projectName);
+        if (existing) {
+          existing.sessions++;
+          existing.messages += sessionMsgs;
+          if (sessionDate && sessionDate < existing.firstSeen) existing.firstSeen = sessionDate;
+          if (sessionDate && sessionDate > existing.lastSeen) existing.lastSeen = sessionDate;
+          if (sessionDate) existing.activeDays.add(sessionDate);
+        } else {
+          projectStatsMap.set(projectName, {
+            sessions: 1,
+            messages: sessionMsgs,
+            firstSeen: sessionDate,
+            lastSeen: sessionDate,
+            activeDays: new Set(sessionDate ? [sessionDate] : []),
+          });
+        }
       }
       if (session.gitBranch) {
         branchCounts.set(session.gitBranch, (branchCounts.get(session.gitBranch) ?? 0) + 1);
@@ -252,6 +296,68 @@ export async function parseCodexFiles(
 
   const messageCount = totalUserMessages + totalAgentMessages;
 
+  // First-class project stats (top 8 by messages)
+  const projectStats = [...projectStatsMap.entries()]
+    .map(([name, p]) => ({
+      name,
+      sessions: p.sessions,
+      messages: p.messages,
+      firstSeen: p.firstSeen,
+      lastSeen: p.lastSeen,
+      activeDays: p.activeDays.size,
+    }))
+    .sort((a, b) => b.messages - a.messages)
+    .slice(0, 8);
+
+  // Word stats (user only for Codex — no per-model assistant text)
+  const userTopWords = topWords(globalUserWords, 12);
+  const totalUserWords = [...globalUserWords.values()].reduce((s, v) => s + v, 0);
+  const distinctUserWords = globalUserWords.size;
+
+  const wordStats: WrappedStats["wordStats"] =
+    userTopWords.length > 0
+      ? {
+          userTopWords,
+          perModelTopWords: [],
+          totalUserWords,
+          totalAssistantWords: 0,
+          distinctUserWords,
+          verbosityRatio: 0,
+        }
+      : undefined;
+
+  // Extras for Codex
+  const WEEKDAY_NAMES = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+  const weekdayTotals = new Array<number>(7).fill(0);
+  const activeDaySet = new Set<string>();
+  for (const d of dailySeries ?? []) {
+    const day = new Date(d.date + "T00:00:00").getDay();
+    weekdayTotals[day] = (weekdayTotals[day] ?? 0) + d.messages;
+    activeDaySet.add(d.date);
+  }
+  const busiestWeekday = weekdayTotals.indexOf(Math.max(...weekdayTotals));
+  const totalActiveDays = activeDaySet.size;
+  const avgMessagesPerActiveDay = totalActiveDays > 0
+    ? Math.round(messageCount / totalActiveDays)
+    : 0;
+
+  const sortedForFirst = allTimestamps.slice().sort();
+  const firstSessionDate = sortedForFirst[0]?.slice(0, 10) ?? "";
+
+  const extras: WrappedStats["extras"] =
+    totalActiveDays > 0
+      ? {
+          busiestWeekday,
+          busiestWeekdayName: WEEKDAY_NAMES[busiestWeekday] ?? "Unknown",
+          totalActiveDays,
+          avgMessagesPerActiveDay,
+          longestSessionMessages: 0,
+          longestSessionDate: "",
+          firstSessionDate,
+          thinkingBlockCount: 0,
+        }
+      : undefined;
+
   const stats: WrappedStats = {
     provider: "codex",
     range: { start: rangeStart, end: rangeEnd },
@@ -277,6 +383,9 @@ export async function parseCodexFiles(
       topBranches,
       avgSessionDurationMs,
     },
+    projectStats: projectStats.length > 0 ? projectStats : undefined,
+    wordStats,
+    extras,
     source: { fileCount: jsonlFiles.length, bytes: totalBytes, parseWarnings },
     isCoding: true,
   };

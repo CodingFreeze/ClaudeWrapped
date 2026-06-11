@@ -8,6 +8,7 @@ import { buildMonthlySeries, buildDailySeries } from "../stats/normalize";
 import { buildHourHistogram } from "../stats/histogram";
 import { computeStreak } from "../stats/streaks";
 import { computeSuperlatives } from "../stats/superlatives";
+import { extractWords, accumulateWords, topWords } from "../stats/wordExtract";
 
 // ---------------------------------------------------------------------------
 // Streaming JSONL line parser (§6.5 pattern)
@@ -71,9 +72,14 @@ interface SessionAccumulator {
   userTurns: number;
   assistantTurns: number;
   toolUseCount: number;
+  thinkingBlockCount: number;
   modelTokens: Map<string, { input: number; output: number; cacheRead: number; cacheCreate: number; messages: number }>;
+  // Tool name counts
+  toolCounts: Map<string, number>;
   parseErrors: number;
   lineCount: number;
+  // Per-session message count (for longestSession detection)
+  messageCount: number;
 }
 
 function newAccumulator(sessionId: string): SessionAccumulator {
@@ -86,9 +92,12 @@ function newAccumulator(sessionId: string): SessionAccumulator {
     userTurns: 0,
     assistantTurns: 0,
     toolUseCount: 0,
+    thinkingBlockCount: 0,
     modelTokens: new Map(),
+    toolCounts: new Map(),
     parseErrors: 0,
     lineCount: 0,
+    messageCount: 0,
   };
 }
 
@@ -102,6 +111,9 @@ async function parseSessionFile(
   file: File,
   acc: SessionAccumulator,
   allTimestamps: string[],
+  globalUserWords: Map<string, number>,
+  globalModelWords: Map<string, Map<string, number>>,
+  globalToolCounts: Map<string, number>,
 ): Promise<void> {
   for await (const raw of streamJsonlFile(file)) {
     const event = raw as Record<string, unknown>;
@@ -133,22 +145,55 @@ async function parseSessionFile(
       // Skip isMeta user events (hook injections)
       if (event.isMeta === true) continue;
       acc.userTurns++;
+      acc.messageCount++;
+
+      // Extract user words from text content
+      const message = event.message as Record<string, unknown> | undefined;
+      if (message) {
+        const content = message.content;
+        if (typeof content === "string") {
+          accumulateWords(globalUserWords, extractWords(content));
+        } else if (Array.isArray(content)) {
+          for (const block of content) {
+            const b = block as Record<string, unknown>;
+            if (b?.type === "text" && typeof b.text === "string") {
+              accumulateWords(globalUserWords, extractWords(b.text));
+            }
+          }
+        }
+      }
     }
 
     if (type === "assistant") {
       acc.assistantTurns++;
+      acc.messageCount++;
 
       const message = event.message as Record<string, unknown> | undefined;
       if (!message) continue;
 
       const model = typeof message.model === "string" ? message.model : "unknown";
 
-      // Count tool_use blocks in content
+      // Count tool_use blocks and thinking blocks in content; extract text words per model
       const content = Array.isArray(message.content) ? message.content : [];
       for (const block of content) {
         const b = block as Record<string, unknown>;
         if (b?.type === "tool_use") {
           acc.toolUseCount++;
+          const toolName = typeof b.name === "string" ? b.name : "unknown";
+          globalToolCounts.set(toolName, (globalToolCounts.get(toolName) ?? 0) + 1);
+          acc.toolCounts.set(toolName, (acc.toolCounts.get(toolName) ?? 0) + 1);
+        }
+        if (b?.type === "thinking") {
+          acc.thinkingBlockCount++;
+        }
+        if (b?.type === "text" && typeof b.text === "string") {
+          // Per-model word accumulation (assistant text only)
+          let modelBucket = globalModelWords.get(model);
+          if (!modelBucket) {
+            modelBucket = new Map<string, number>();
+            globalModelWords.set(model, modelBucket);
+          }
+          accumulateWords(modelBucket, extractWords(b.text));
         }
       }
 
@@ -214,6 +259,7 @@ export async function parseClaudeCodeFiles(
   let totalUserTurns = 0;
   let totalAssistantTurns = 0;
   let totalToolUseCount = 0;
+  let totalThinkingBlockCount = 0;
   let totalParseErrors = 0;
   const allTimestamps: string[] = [];
 
@@ -222,19 +268,39 @@ export async function parseClaudeCodeFiles(
     input: number; output: number; cacheRead: number; cacheCreate: number; messages: number;
   }>();
 
+  // Word accumulation
+  const globalUserWords = new Map<string, number>();
+  const globalModelWords = new Map<string, Map<string, number>>();
+  const globalToolCounts = new Map<string, number>();
+
+  // Project stats accumulation: name → { sessions, messages, firstSeen, lastSeen, activeDays set }
+  const projectStatsMap = new Map<string, {
+    sessions: number;
+    messages: number;
+    firstSeen: string;
+    lastSeen: string;
+    activeDays: Set<string>;
+  }>();
+
   // Coding stats
   const cwdCounts = new Map<string, number>();
   const branchCounts = new Map<string, number>();
+
+  // Longest session tracking
+  let longestSessionMessages = 0;
+  let longestSessionDate = "";
+  let firstSessionDate = "";
 
   for (let i = 0; i < jsonlFiles.length; i++) {
     const file = jsonlFiles[i];
     const acc = newAccumulator(file.name);
 
-    await parseSessionFile(file, acc, allTimestamps);
+    await parseSessionFile(file, acc, allTimestamps, globalUserWords, globalModelWords, globalToolCounts);
 
     totalUserTurns += acc.userTurns;
     totalAssistantTurns += acc.assistantTurns;
     totalToolUseCount += acc.toolUseCount;
+    totalThinkingBlockCount += acc.thinkingBlockCount;
     totalParseErrors += acc.parseErrors;
 
     // Track high parse error rate
@@ -263,9 +329,41 @@ export async function parseClaudeCodeFiles(
       const parts = acc.cwd.replace(/\/$/, "").split("/").filter(Boolean);
       const projectName = parts.slice(-2).join("/") || acc.cwd;
       cwdCounts.set(projectName, (cwdCounts.get(projectName) ?? 0) + 1);
+
+      // Project stats: accumulate per-project session/message counts
+      const sessionDate = acc.firstTimestamp.slice(0, 10);
+      const sessionMsgs = acc.userTurns + acc.assistantTurns;
+      const existing = projectStatsMap.get(projectName);
+      if (existing) {
+        existing.sessions++;
+        existing.messages += sessionMsgs;
+        if (sessionDate && sessionDate < existing.firstSeen) existing.firstSeen = sessionDate;
+        if (sessionDate && sessionDate > existing.lastSeen) existing.lastSeen = sessionDate;
+        if (sessionDate) existing.activeDays.add(sessionDate);
+      } else {
+        projectStatsMap.set(projectName, {
+          sessions: 1,
+          messages: sessionMsgs,
+          firstSeen: sessionDate,
+          lastSeen: sessionDate,
+          activeDays: new Set(sessionDate ? [sessionDate] : []),
+        });
+      }
     }
     if (acc.gitBranch) {
       branchCounts.set(acc.gitBranch, (branchCounts.get(acc.gitBranch) ?? 0) + 1);
+    }
+
+    // Longest session
+    if (acc.messageCount > longestSessionMessages) {
+      longestSessionMessages = acc.messageCount;
+      longestSessionDate = acc.firstTimestamp.slice(0, 10);
+    }
+    // First session date
+    if (acc.firstTimestamp) {
+      if (!firstSessionDate || acc.firstTimestamp.slice(0, 10) < firstSessionDate) {
+        firstSessionDate = acc.firstTimestamp.slice(0, 10);
+      }
     }
 
     onProgress?.(i + 1, jsonlFiles.length);
@@ -325,7 +423,87 @@ export async function parseClaudeCodeFiles(
     [...branchCounts.entries()].map(([name, sessions]) => ({ name, sessions })),
   );
 
+  // First-class project stats (top 8 by messages)
+  const projectStats = [...projectStatsMap.entries()]
+    .map(([name, p]) => ({
+      name,
+      sessions: p.sessions,
+      messages: p.messages,
+      firstSeen: p.firstSeen,
+      lastSeen: p.lastSeen,
+      activeDays: p.activeDays.size,
+    }))
+    .sort((a, b) => b.messages - a.messages)
+    .slice(0, 8);
+
+  // Word stats
+  const userTopWords = topWords(globalUserWords, 12);
+  const totalUserWords = [...globalUserWords.values()].reduce((s, v) => s + v, 0);
+
+  // Per-model top words (top 8 each)
+  const perModelTopWords = [...globalModelWords.entries()].map(([model, map]) => ({
+    model,
+    words: topWords(map, 8),
+  }));
+
+  // Assistant word count estimate: sum all per-model word maps
+  let totalAssistantWords = 0;
+  for (const wmap of globalModelWords.values()) {
+    for (const count of wmap.values()) {
+      totalAssistantWords += count;
+    }
+  }
+
+  const distinctUserWords = globalUserWords.size;
+  const verbosityRatio = totalUserWords > 0
+    ? Math.round((totalAssistantWords / totalUserWords) * 10) / 10
+    : 0;
+
+  const wordStats: WrappedStats["wordStats"] =
+    userTopWords.length > 0
+      ? { userTopWords, perModelTopWords, totalUserWords, totalAssistantWords, distinctUserWords, verbosityRatio }
+      : undefined;
+
+  // Tool stats
+  const topTools = [...globalToolCounts.entries()]
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 8);
+
+  const toolStats: WrappedStats["toolStats"] =
+    topTools.length > 0
+      ? { topTools, totalInvocations: totalToolUseCount }
+      : undefined;
+
+  // Extras: busiest weekday, activeDays, avg messages/day, longest session
+  const WEEKDAY_NAMES = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+  const weekdayTotals = new Array<number>(7).fill(0);
+  const activeDaySet = new Set<string>();
+  for (const d of dailySeries ?? []) {
+    const day = new Date(d.date + "T00:00:00").getDay();
+    weekdayTotals[day] = (weekdayTotals[day] ?? 0) + d.messages;
+    activeDaySet.add(d.date);
+  }
+  const busiestWeekday = weekdayTotals.indexOf(Math.max(...weekdayTotals));
+  const totalActiveDays = activeDaySet.size;
   const messageCount = totalUserTurns + totalAssistantTurns;
+  const avgMessagesPerActiveDay = totalActiveDays > 0
+    ? Math.round(messageCount / totalActiveDays)
+    : 0;
+
+  const extras: WrappedStats["extras"] =
+    totalActiveDays > 0
+      ? {
+          busiestWeekday,
+          busiestWeekdayName: WEEKDAY_NAMES[busiestWeekday] ?? "Unknown",
+          totalActiveDays,
+          avgMessagesPerActiveDay,
+          longestSessionMessages,
+          longestSessionDate,
+          firstSessionDate,
+          thinkingBlockCount: totalThinkingBlockCount,
+        }
+      : undefined;
 
   const stats: WrappedStats = {
     provider: "claude-code",
@@ -353,6 +531,10 @@ export async function parseClaudeCodeFiles(
       topProjects,
       topBranches,
     },
+    projectStats: projectStats.length > 0 ? projectStats : undefined,
+    wordStats,
+    toolStats,
+    extras,
     source: { fileCount: jsonlFiles.length, bytes: totalBytes, parseWarnings },
     isCoding: true,
   };

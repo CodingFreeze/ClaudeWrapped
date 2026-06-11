@@ -9,6 +9,7 @@ import { buildMonthlySeries, buildDailySeries } from "../stats/normalize";
 import { buildHourHistogram } from "../stats/histogram";
 import { computeStreak } from "../stats/streaks";
 import { computeSuperlatives } from "../stats/superlatives";
+import { extractWords, accumulateWords, topWords } from "../stats/wordExtract";
 
 // Keep legacy import-compat
 export { parseClaudeAiZip } from "../claudeAiZip";
@@ -64,6 +65,7 @@ export async function parseClaudeAiZipToStats(file: File): Promise<WrappedStats>
   let messageCount = 0;
   let userMessageCount = 0;
   let assistantMessageCount = 0;
+  const userWordMap = new Map<string, number>();
 
   for (const convo of conversations) {
     const messages: ClaudeAiMessage[] = Array.isArray(convo?.chat_messages)
@@ -79,8 +81,15 @@ export async function parseClaudeAiZipToStats(file: File): Promise<WrappedStats>
     for (const msg of messages) {
       messageCount++;
       const sender = typeof msg?.sender === "string" ? msg.sender : "(unknown)";
-      if (sender === "human") userMessageCount++;
-      else if (sender === "assistant") assistantMessageCount++;
+      if (sender === "human") {
+        userMessageCount++;
+        // Extract words from text field (already walked path, no second pass)
+        if (typeof msg.text === "string") {
+          accumulateWords(userWordMap, extractWords(msg.text));
+        }
+      } else if (sender === "assistant") {
+        assistantMessageCount++;
+      }
 
       const ts = typeof msg?.created_at === "string" ? msg.created_at : undefined;
       if (ts) allTimestamps.push(ts);
@@ -99,6 +108,21 @@ export async function parseClaudeAiZipToStats(file: File): Promise<WrappedStats>
   const sorted = allTimestamps.slice().sort();
   const rangeStart = sorted[0] ?? new Date().toISOString().slice(0, 10);
   const rangeEnd = sorted[sorted.length - 1] ?? new Date().toISOString().slice(0, 10);
+
+  // Build wordStats from accumulated user words
+  const userTopWords = topWords(userWordMap, 12);
+  const totalUserWords = [...userWordMap.values()].reduce((s, v) => s + v, 0);
+  const wordStats: WrappedStats["wordStats"] =
+    userTopWords.length > 0
+      ? {
+          userTopWords,
+          perModelTopWords: [],
+          totalUserWords,
+          totalAssistantWords: 0,
+          distinctUserWords: userWordMap.size,
+          verbosityRatio: 0,
+        }
+      : undefined;
 
   const stats: WrappedStats = {
     provider: "claude-ai",
@@ -122,6 +146,7 @@ export async function parseClaudeAiZipToStats(file: File): Promise<WrappedStats>
           busiestCount: streakResult.busiestCount,
         }
       : undefined,
+    wordStats,
     source: { fileCount: 1, bytes: file.size, parseWarnings },
     isCoding: false,
   };

@@ -9,6 +9,7 @@ import { buildMonthlySeries, buildDailySeries } from "../stats/normalize";
 import { buildHourHistogram } from "../stats/histogram";
 import { computeStreak } from "../stats/streaks";
 import { computeSuperlatives } from "../stats/superlatives";
+import { extractWords, accumulateWords, topWords } from "../stats/wordExtract";
 
 const CONVERSATIONS_ENTRY = /(^|\/)conversations\.json$/i;
 
@@ -46,6 +47,7 @@ function parseConversations(
   let userMessageCount = 0;
   let assistantMessageCount = 0;
   const modelCounts = new Map<string, number>();
+  const userWordMap = new Map<string, number>();
 
   for (const convo of conversations) {
     if (!convo.mapping || typeof convo.mapping !== "object") continue;
@@ -57,7 +59,18 @@ function parseConversations(
       if (!msg.create_time) continue;
 
       messageCount++;
-      if (msg.author.role === "user") userMessageCount++;
+      if (msg.author.role === "user") {
+        userMessageCount++;
+        // Extract words from text parts (already walked, no second pass)
+        const parts = msg.content?.parts;
+        if (Array.isArray(parts)) {
+          for (const part of parts) {
+            if (typeof part === "string") {
+              accumulateWords(userWordMap, extractWords(part));
+            }
+          }
+        }
+      }
       if (msg.author.role === "assistant") {
         assistantMessageCount++;
         const slug = msg.metadata?.model_slug;
@@ -85,6 +98,21 @@ function parseConversations(
           .sort((a, b) => b.messages - a.messages)
       : undefined;
 
+  // Build wordStats from accumulated user words
+  const userTopWords = topWords(userWordMap, 12);
+  const totalUserWords = [...userWordMap.values()].reduce((s, v) => s + v, 0);
+  const wordStats: WrappedStats["wordStats"] =
+    userTopWords.length > 0
+      ? {
+          userTopWords,
+          perModelTopWords: [],
+          totalUserWords,
+          totalAssistantWords: 0,
+          distinctUserWords: userWordMap.size,
+          verbosityRatio: 0,
+        }
+      : undefined;
+
   const stats: WrappedStats = {
     provider: "chatgpt",
     range: { start: rangeStart, end: rangeEnd },
@@ -105,6 +133,7 @@ function parseConversations(
           busiestCount: streakResult.busiestCount,
         }
       : undefined,
+    wordStats,
     source: { fileCount: 1, bytes: fileSize, parseWarnings },
     isCoding: false,
   };
