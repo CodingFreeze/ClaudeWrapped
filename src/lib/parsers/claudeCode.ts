@@ -14,7 +14,7 @@ import { computeSuperlatives } from "../stats/superlatives";
 // ---------------------------------------------------------------------------
 
 async function* streamJsonlFile(file: File): AsyncGenerator<unknown> {
-  if (!("stream" in file)) {
+  if (typeof file.stream !== "function") {
     // Polyfill path: read entire file
     const text = await file.text();
     const lines = text.split("\n");

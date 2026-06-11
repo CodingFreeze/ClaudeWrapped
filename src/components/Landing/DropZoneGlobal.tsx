@@ -1,13 +1,15 @@
 // ---------------------------------------------------------------------------
-// DropZoneGlobal — catch-all drop zone with coral dashed border.
-// Accepts any format and runs basic auto-detection (P3 wire-up: detect.ts).
+// DropZoneGlobal — catch-all drop zone with full auto-detection cascade.
+// Supports folder drag-drop via DataTransferItem.webkitGetAsEntry traversal.
 // ---------------------------------------------------------------------------
 
-import { useState } from "react";
+import { useState, useId } from "react";
 import type { Provider } from "../../lib/types";
+import { autoDetect } from "../../lib/parsers/detect";
 
 interface DropZoneGlobalProps {
   onFiles: (provider: Provider, files: File[]) => void;
+  onFilesFromTransfer?: (items: DataTransferItemList) => Promise<File[]>;
 }
 
 function PlusIcon() {
@@ -19,44 +21,56 @@ function PlusIcon() {
   );
 }
 
-/** Basic auto-detection — file extension / name heuristics only.
- *  Full detect.ts cascade lives in P3. */
-function detectProvider(files: File[]): Provider | null {
-  for (const f of files) {
-    // Folder of .jsonl files
-    if (f.name.endsWith(".jsonl")) {
-      if (/rollout-.*\.jsonl/.test(f.name)) return "codex";
-      return "claude-code";
-    }
-    // ZIP
-    if (f.name.endsWith(".zip") || f.type === "application/zip") {
-      return "claude-ai"; // default — parser will discriminate
-    }
-    // JSON
-    if (f.name === "conversations.json" || f.name === "MyActivity.json") {
-      if (f.name === "MyActivity.json") return "gemini";
-      return "claude-ai";
-    }
-  }
-  return null;
-}
-
-export function DropZoneGlobal({ onFiles }: DropZoneGlobalProps) {
+export function DropZoneGlobal({ onFiles, onFilesFromTransfer }: DropZoneGlobalProps) {
   const [dragOver, setDragOver] = useState(false);
   const [detectionNote, setDetectionNote] = useState<string | null>(null);
+  const [detecting, setDetecting] = useState(false);
+  const inputId = useId();
 
-  function handleFiles(fileList: FileList | null) {
-    if (!fileList || fileList.length === 0) return;
-    const files = Array.from(fileList);
-    const detected = detectProvider(files);
-    if (detected) {
-      setDetectionNote(`Detected: ${detected} — sending to parser…`);
-      onFiles(detected, files);
-    } else {
-      setDetectionNote(
-        "Could not detect provider automatically. Use the provider tiles above to select the correct source.",
-      );
+  async function processFiles(files: File[]) {
+    if (files.length === 0) return;
+
+    setDetecting(true);
+    setDetectionNote(null);
+
+    try {
+      const result = await autoDetect(files);
+
+      if (result.provider) {
+        setDetectionNote(
+          `Detected: ${result.provider.replace("-", " ")} — sending to parser…`,
+        );
+        onFiles(result.provider, files);
+      } else {
+        setDetectionNote(
+          (result as { provider: null; reason: string }).reason +
+            " Use the provider tiles above to select the correct source.",
+        );
+      }
+    } finally {
+      setDetecting(false);
     }
+  }
+
+  async function handleDrop(e: React.DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+    setDragOver(false);
+
+    let files: File[];
+
+    // Prefer directory traversal path
+    if (onFilesFromTransfer && e.dataTransfer.items) {
+      files = await onFilesFromTransfer(e.dataTransfer.items);
+    } else {
+      files = Array.from(e.dataTransfer.files);
+    }
+
+    await processFiles(files);
+  }
+
+  function handleFileInput(fileList: FileList | null) {
+    if (!fileList || fileList.length === 0) return;
+    processFiles(Array.from(fileList));
   }
 
   return (
@@ -77,25 +91,21 @@ export function DropZoneGlobal({ onFiles }: DropZoneGlobalProps) {
         }}
         onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
         onDragLeave={() => setDragOver(false)}
-        onDrop={(e) => {
-          e.preventDefault();
-          setDragOver(false);
-          handleFiles(e.dataTransfer.files);
-        }}
-        onClick={() => {
-          const input = document.createElement("input");
-          input.type = "file";
-          input.multiple = true;
-          input.onchange = () => handleFiles(input.files);
-          input.click();
-        }}
+        onDrop={handleDrop}
+        onClick={() => document.getElementById(inputId)?.click()}
         role="button"
         tabIndex={0}
-        onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLElement).click()}
+        onKeyDown={(e) => e.key === "Enter" && document.getElementById(inputId)?.click()}
         aria-label="Drop any AI export file for auto-detection"
       >
         <span style={{ color: "var(--aw-coral)", opacity: dragOver ? 1 : 0.5 }}>
-          <PlusIcon />
+          {detecting ? (
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true" className="animate-spin">
+              <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+            </svg>
+          ) : (
+            <PlusIcon />
+          )}
         </span>
         <p className="text-center text-sm" style={{ color: "var(--aw-ink-soft)" }}>
           <span className="font-semibold">Drop any format</span> — ZIP, JSON, or JSONL folder.
@@ -106,8 +116,22 @@ export function DropZoneGlobal({ onFiles }: DropZoneGlobalProps) {
         </p>
       </div>
 
+      {/* Hidden multi-file input for click-to-browse fallback */}
+      <input
+        id={inputId}
+        type="file"
+        multiple
+        className="hidden"
+        onChange={(e) => handleFileInput(e.target.files)}
+      />
+
       {detectionNote && (
-        <p className="mt-2 text-xs" style={{ color: "var(--aw-ink-soft)" }}>
+        <p
+          className="mt-2 text-xs"
+          style={{ color: "var(--aw-ink-soft)" }}
+          role="status"
+          aria-live="polite"
+        >
           {detectionNote}
         </p>
       )}
