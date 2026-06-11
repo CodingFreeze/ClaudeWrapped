@@ -1,10 +1,13 @@
 // ---------------------------------------------------------------------------
-// SlideShare — S10: share card summary + download button stub.
-// Full html-to-image export lives in P4; stub shows a summary card.
+// SlideShare — S10: share card preview + download/copy actions.
+// Uses ShareCard (off-screen) + shareCardExport for html-to-image export.
 // ---------------------------------------------------------------------------
 
+import { useRef, useState } from "react";
 import { motion } from "motion/react";
 import type { WrappedStats } from "../../../lib/types";
+import { ShareCard } from "../../Share/ShareCard";
+import { downloadShareCard, copyShareCardToClipboard } from "../../Share/shareCardExport";
 
 const springBouncy = { type: "spring", stiffness: 600, damping: 20, mass: 0.8 } as const;
 const springRelaxed = { type: "spring", stiffness: 200, damping: 24 } as const;
@@ -25,6 +28,15 @@ function DownloadIcon() {
   );
 }
 
+function CopyIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+    </svg>
+  );
+}
+
 function ResetIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -34,8 +46,21 @@ function ResetIcon() {
   );
 }
 
+function CheckIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polyline points="20 6 9 17 4 12"/>
+    </svg>
+  );
+}
+
 export function SlideShare({ stats, isVisible, onReset }: SlideShareProps) {
   const year = stats.range.start.slice(0, 4);
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  const [downloading, setDownloading] = useState(false);
+  const [copying, setCopying] = useState(false);
+  const [copySuccess, setCopySuccess] = useState(false);
+
   const sups = stats.superlatives;
   const badges = sups
     ? [
@@ -46,11 +71,38 @@ export function SlideShare({ stats, isVisible, onReset }: SlideShareProps) {
       ].filter((s): s is string => Boolean(s))
     : [];
 
+  async function handleDownload() {
+    if (!cardRef.current || downloading) return;
+    setDownloading(true);
+    try {
+      await downloadShareCard(cardRef.current, { year });
+    } finally {
+      setDownloading(false);
+    }
+  }
+
+  async function handleCopy() {
+    if (!cardRef.current || copying) return;
+    setCopying(true);
+    try {
+      const ok = await copyShareCardToClipboard(cardRef.current);
+      if (ok) {
+        setCopySuccess(true);
+        window.setTimeout(() => setCopySuccess(false), 2500);
+      }
+    } finally {
+      setCopying(false);
+    }
+  }
+
   return (
     <div
       className="relative flex h-full flex-col items-center justify-center gap-8 px-8 py-14"
       style={{ background: "var(--aw-paper)" }}
     >
+      {/* Off-screen share card for html-to-image */}
+      <ShareCard stats={stats} nodeRef={cardRef} />
+
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0"
@@ -60,7 +112,7 @@ export function SlideShare({ stats, isVisible, onReset }: SlideShareProps) {
         }}
       />
 
-      {/* Share card preview */}
+      {/* On-screen preview card */}
       <motion.div
         className="relative z-10 w-full max-w-xs rounded-2xl border p-6 text-center"
         style={{ borderColor: "var(--aw-coral)", background: "var(--aw-surface)" }}
@@ -105,37 +157,55 @@ export function SlideShare({ stats, isVisible, onReset }: SlideShareProps) {
         )}
 
         <p className="mt-4 text-[10px]" style={{ color: "var(--aw-ink-mute)" }}>
-          AI Wrapped — your year in AI
+          Your year in AI, wrapped.
         </p>
       </motion.div>
 
       {/* Action buttons */}
       <motion.div
-        className="relative z-10 flex gap-3"
+        className="relative z-10 flex flex-wrap justify-center gap-3"
         initial={{ opacity: 0, y: 20 }}
         animate={isVisible ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
         transition={{ ...springRelaxed, delay: 0.4 }}
       >
         <button
           type="button"
-          className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-transform hover:-translate-y-0.5 active:translate-y-0 opacity-50 cursor-not-allowed"
-          style={{ background: "var(--aw-surface-2)", color: "var(--aw-ink-soft)" }}
-          disabled
-          title="Coming in P4"
+          onClick={handleDownload}
+          disabled={downloading}
+          className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-transform hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-60 disabled:cursor-wait focus-visible:outline-none focus-visible:ring-2"
+          style={{ background: "var(--aw-coral)", color: "var(--aw-paper)" }}
+          aria-label="Download share card as PNG"
         >
           <DownloadIcon />
-          Download card (P4)
+          {downloading ? "Generating…" : "Download card"}
+        </button>
+
+        <button
+          type="button"
+          onClick={handleCopy}
+          disabled={copying}
+          className="inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-semibold transition-transform hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2"
+          style={{
+            borderColor: copySuccess ? "oklch(70% 0.14 155)" : "var(--aw-coral)",
+            color: copySuccess ? "oklch(70% 0.14 155)" : "var(--aw-coral)",
+            background: "transparent",
+          }}
+          aria-label="Copy share card to clipboard"
+        >
+          {copySuccess ? <CheckIcon /> : <CopyIcon />}
+          {copySuccess ? "Copied!" : copying ? "Copying…" : "Copy image"}
         </button>
 
         <button
           type="button"
           onClick={onReset}
-          className="inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-semibold transition-transform hover:-translate-y-0.5 active:translate-y-0"
+          className="inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-semibold transition-transform hover:-translate-y-0.5 active:translate-y-0 focus-visible:outline-none focus-visible:ring-2"
           style={{
             borderColor: "var(--aw-hairline)",
             color: "var(--aw-ink-soft)",
             background: "transparent",
           }}
+          aria-label="Start over with new data"
         >
           <ResetIcon />
           Start over
