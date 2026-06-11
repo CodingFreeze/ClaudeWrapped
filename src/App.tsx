@@ -331,6 +331,17 @@ export default function App() {
     );
   }, [phase, dateRange]);
 
+  // Derive the data range from all loaded stats (for populating the year selector).
+  // Must run before the deck early-return so the hook order is stable across phases.
+  const loadedDataRange = useMemo((): { start: string; end: string } | null => {
+    if (phase.kind !== "importing") return null;
+    const done = phase.providers.filter((p) => p.status === "done" && p.stats);
+    if (done.length === 0) return null;
+    const starts = done.map((p) => p.stats!.range.start).sort();
+    const ends = done.map((p) => p.stats!.range.end).sort();
+    return { start: starts[0], end: ends[ends.length - 1] };
+  }, [phase]);
+
   // --- Deck mode ---
   if (phase.kind === "deck" && filteredStats && filteredAllStats) {
     return (
@@ -355,16 +366,6 @@ export default function App() {
   }
 
   const importingView = phase.kind === "importing" ? phase.view : "merged";
-
-  // Derive the data range from all loaded stats (for populating the year selector).
-  const loadedDataRange = useMemo((): { start: string; end: string } | null => {
-    if (phase.kind !== "importing") return null;
-    const done = phase.providers.filter((p) => p.status === "done" && p.stats);
-    if (done.length === 0) return null;
-    const starts = done.map((p) => p.stats!.range.start).sort();
-    const ends = done.map((p) => p.stats!.range.end).sort();
-    return { start: starts[0], end: ends[ends.length - 1] };
-  }, [phase]);
 
   // --- Landing + import ---
   return (
