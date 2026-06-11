@@ -47,6 +47,59 @@ function mergeHistograms(
   return filtered.reduce((acc, h) => acc.map((v, i) => v + h[i]), new Array<number>(24).fill(0));
 }
 
+/** Merge codingStats across providers: combine topProjects/topBranches by name. */
+function mergeCodingStats(
+  allStats: WrappedStats[],
+): WrappedStats["codingStats"] | undefined {
+  const withCoding = allStats.filter((s) => s.codingStats);
+  if (withCoding.length === 0) return undefined;
+
+  // Merge topProjects by name, summing sessions, then sort desc, top 5.
+  const projectMap = new Map<string, number>();
+  for (const s of withCoding) {
+    for (const p of s.codingStats!.topProjects) {
+      projectMap.set(p.name, (projectMap.get(p.name) ?? 0) + p.sessions);
+    }
+  }
+  const topProjects = [...projectMap.entries()]
+    .map(([name, sessions]) => ({ name, sessions }))
+    .sort((a, b) => b.sessions - a.sessions)
+    .slice(0, 5);
+
+  // Merge topBranches by name, summing sessions, then sort desc, top 5.
+  const branchMap = new Map<string, number>();
+  for (const s of withCoding) {
+    for (const b of s.codingStats!.topBranches) {
+      branchMap.set(b.name, (branchMap.get(b.name) ?? 0) + b.sessions);
+    }
+  }
+  const topBranches = [...branchMap.entries()]
+    .map(([name, sessions]) => ({ name, sessions }))
+    .sort((a, b) => b.sessions - a.sessions)
+    .slice(0, 5);
+
+  // Duration-weighted mean of avgSessionDurationMs across sources that have it.
+  const withDuration = withCoding.filter(
+    (s) => s.codingStats!.avgSessionDurationMs !== undefined,
+  );
+  let avgSessionDurationMs: number | undefined;
+  if (withDuration.length > 0) {
+    const totalSessions = withDuration.reduce(
+      (sum, s) => sum + s.codingStats!.topProjects.reduce((ps, p) => ps + p.sessions, 0),
+      0,
+    );
+    if (totalSessions > 0) {
+      avgSessionDurationMs =
+        withDuration.reduce((sum, s) => {
+          const sessions = s.codingStats!.topProjects.reduce((ps, p) => ps + p.sessions, 0);
+          return sum + s.codingStats!.avgSessionDurationMs! * sessions;
+        }, 0) / totalSessions;
+    }
+  }
+
+  return { topProjects, topBranches, avgSessionDurationMs };
+}
+
 /** Aggregate merged stats. */
 export function aggregateStats(
   allStats: WrappedStats[],
@@ -135,8 +188,7 @@ export function aggregateStats(
           busiestCount: streak.busiestCount,
         }
       : undefined,
-    codingStats:
-      allStats.some((s) => s.codingStats) ? undefined : undefined, // merged coding stats TBD in P3
+    codingStats: mergeCodingStats(allStats),
     source: {
       fileCount: allStats.reduce((s, x) => s + x.source.fileCount, 0),
       bytes: allStats.reduce((s, x) => s + x.source.bytes, 0),
